@@ -11,6 +11,7 @@ from example.components.highlighter import PLCSyntaxHighlighter
 from example.components.lexica import MyLexer
 from example.components.parsers import ASTParser
 from example.components.memory import Memory
+from example.components.type_checker import TypeChecker
 
 class CompilerIDE(QMainWindow):
     def __init__(self):
@@ -175,6 +176,7 @@ class CompilerIDE(QMainWindow):
                 )
                 return
 
+            TypeChecker().check(tree)
             tree.run(memory)
 
             for line in memory.output:
