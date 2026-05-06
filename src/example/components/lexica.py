@@ -15,10 +15,32 @@ class MyLexer(Lexer):
     # set `tokens` so it can be used in the parser.
     # This must be here and all Capitalized. 
     # Please, ignore IDE warning.
-    tokens = { ASSIGN, NAME, NUMBER, MINUS, DIVIDE, TIMES, LPAREN, RPAREN}
-    
-    # https://sly.readthedocs.io/en/latest/sly.html#literal-characters
-    literals = { '+' }
+    tokens = {
+        ASSIGN,
+
+        NAME,
+        NUMBER,
+        FLOAT,
+        STRING,
+
+        TRUE,
+        FALSE,
+
+        PLUS,
+        MINUS,
+        TIMES,
+        DIVIDE,
+
+        LESS,
+        LESS_EQUAL,
+        GREATER,
+        GREATER_EQUAL,
+        EQUAL,
+        NOT_EQUAL,
+
+        LPAREN,
+        RPAREN,
+   }
     
     ### matching rule ###
     # The matching work from top to bottom
@@ -29,23 +51,25 @@ class MyLexer(Lexer):
 
     ### EX1: simply define with regEX ###
     NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
-    ### EX2: Define as a function ###
-    @_(r'\d+')
-    def NUMBER(self, token):
-        # Note that this function set parse token.value to integer
-        token.value = int(token.value)
-        # Extra print for debug
-        print(f"====This print from NUMBER function: {token.type=} {token.value=} {type(token.value)=}")
-        return token
+    NAME['true'] = TRUE
+    NAME['false'] = FALSE
 
     # Try uncomment this and run to see the differences between `token` and `literal`
+    
+    LESS_EQUAL = r'<='
+    GREATER_EQUAL = r'>='
+    EQUAL = r'=='
+    NOT_EQUAL = r'!='
     ASSIGN  = r'\='
-    # PLUS    = r'\+'
+    LESS = r'<'
+    GREATER = r'>'
+    LPAREN = r'\('
+    RPAREN = r'\)'
+    PLUS    = r'\+'
     MINUS   = r'-'
     TIMES   = r'\*'
     DIVIDE  = r'/'
-    LPAREN  = r'\('
-    RPAREN  = r'\)'
+
 
     # Extra action for newlines
     @_(r'\n+')
@@ -56,6 +80,25 @@ class MyLexer(Lexer):
     def error(self, t):
         self.index += 1
         print(f"ERROR: Illegal character '{t.value[0]}' at line {self.lineno}")
+
+    @_(r'\d+\.\d+')
+    def FLOAT(self, token):
+        token.value = float(token.value)
+        return token
+    
+    ### EX2: Define as a function ###
+    @_(r'\d+')
+    def NUMBER(self, token):
+        # Note that this function set parse token.value to integer
+        token.value = int(token.value)
+        # Extra print for debug
+        print(f"====This print from NUMBER function: {token.type=} {token.value=} {type(token.value)=}")
+        return token
+    
+    @_(r'"[^"]*"')
+    def STRING(self, token):
+        token.value = token.value[1:-1]
+        return token
 
 if __name__ == '__main__':
     # Write a simple test that only run when you execute this file
