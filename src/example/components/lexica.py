@@ -1,5 +1,4 @@
 from sly import Lexer
-import sly
 
 
 class MyLexer(Lexer):
@@ -130,9 +129,3 @@ if __name__ == "__main__":
     )
 
     print("\nAll lexer tests passed.")
-
-    string_input: str = "x1 + 1as! * ()"
-    lex: Lexer = MyLexer()
-    token: sly.lex.Token
-    for token in lex.tokenize(string_input):
-        print(token)

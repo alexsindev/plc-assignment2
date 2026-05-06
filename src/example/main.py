@@ -2,15 +2,14 @@ import sys
 import io
 import contextlib
 import traceback
-from PySide6 import QtUiTools
-from PySide6.QtWidgets import QApplication, QLabel
-from PySide6.QtWidgets import QMainWindow, QPushButton, QLineEdit, QLCDNumber, QVBoxLayout, QWidget, QHBoxLayout, QPushButton, QPlainTextEdit, QTextEdit, QSplitter, QFileDialog, QMessageBox, QLabel
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget,
+    QHBoxLayout, QPlainTextEdit, QTextEdit, QSplitter, QFileDialog, QLabel,
+)
+from PySide6.QtCore import Qt
 from example.components.lexica import MyLexer
 from example.components.parsers import ASTParser
 from example.components.memory import Memory
-from example.components.ui import Ui_MainWindow
-
-from PySide6.QtCore import Qt
 
 class CompilerIDE(QMainWindow):
     def __init__(self):

@@ -46,8 +46,7 @@ class ReturnSignal(Exception):
 
 class Statement(ABC):
     @abstractmethod
-    def run(self, memory: Memory | None = None) -> object:
-        raise NotImplementedError
+    def run(self, memory: Memory | None = None) -> object: ...
 
 
 class Expression(ABC):
@@ -57,8 +56,7 @@ class Expression(ABC):
         self.data_type: DataType | None = None
 
     @abstractmethod
-    def run(self, memory: Memory | None = None) -> object:
-        raise NotImplementedError
+    def run(self, memory: Memory | None = None) -> object: ...
 
 
 class Expression_math(Expression):
@@ -352,14 +350,13 @@ class Statement_while(Statement):
 
     def run(self, memory: Memory | None = None) -> object:
         mem = memory or Memory()
+        self.condition.run(mem)
+        if self.condition.data_type != DataType.BOOL:
+            raise TypeError("while condition must evaluate to bool")
         last_result = None
-        while True:
-            self.condition.run(mem)
-            if self.condition.data_type != DataType.BOOL:
-                raise TypeError("while condition must evaluate to bool")
-            if not self.condition.value:
-                break
+        while self.condition.value:
             last_result = self.body.run(mem)
+            self.condition.run(mem)
         return last_result
 
     def __repr__(self) -> str:
@@ -409,7 +406,6 @@ class Statement_function(Statement):
             )
 
         if self.function_type.parameter_types:
-            assert len(self.function_type.parameter_types) == len(argument_types)
             if self.function_type.parameter_types != argument_types:
                 raise TypeError(
                     f"Function '{self.function_name}' expects "
