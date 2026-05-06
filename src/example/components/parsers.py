@@ -1,50 +1,63 @@
-from components.lexica import MyLexer
-from components.memory import Memory
 from sly import Parser
 
+from components.ast.statement import (
+    CompareOperations,
+    Expression,
+    Expression_boolean,
+    Expression_call,
+    Expression_compare,
+    Expression_float,
+    Expression_math,
+    Expression_number,
+    Expression_string,
+    Expression_variable,
+    Operations,
+    Statement_assignment,
+    Statement_block,
+    Statement_expression,
+    Statement_function,
+    Statement_if,
+    Statement_print,
+    Statement_return,
+    Statement_while,
+)
+from components.lexica import MyLexer
+from components.memory import Memory
+
+
 class MyParser(Parser):
-    debugfile = 'parser.out'
-    start = 'statement'
-    # Get the token list from the lexer (required)
+    """Legacy immediate-evaluation parser kept for the calculator GUI."""
+
+    debugfile = "parser.out"
+    start = "statement"
     tokens = MyLexer.tokens
     precedence = (
-    ('left', LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL),
-    ('left', PLUS, MINUS),
-    ('left', TIMES, DIVIDE),
-    ('right', UMINUS),
+        ("left", LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL),
+        ("left", PLUS, MINUS),
+        ("left", TIMES, DIVIDE),
+        ("right", UMINUS),
     )
-    
+
     def __init__(self):
-        self.memory:Memory = Memory()
+        self.memory = Memory()
 
     @_('NAME ASSIGN expr')
     def statement(self, p):
         var_name = p.NAME
         value = p.expr
-        self.memory.set(variable_name=var_name,value=value, data_type=type(value))
-        # Note that I did not return anything
+        self.memory.set(name=var_name, value=value, data_type=type(value))
+        return value
 
     @_('expr')
-    # S -> E
-    def statement(self, p) -> int:
+    def statement(self, p):
         return p.expr
 
-    # The example with literals
     @_('expr PLUS expr')
-    # E -> E + E
     def expr(self, p):
-        # You can refer to the token 2 ways
-        # Way1: using array
-        print(p[0], p[1], p[2])
-        # Way2: using symbol name. 
-        # Here, if you have more than one symbols with the same name
-        # You have to indiciate the number at the end.
         return p.expr0 + p.expr1
 
-    # The example with normal token
     @_('expr MINUS expr')
     def expr(self, p):
-        print(p[0], p[1], p[2])
         return p.expr0 - p.expr1
 
     @_('expr TIMES expr')
@@ -55,8 +68,6 @@ class MyParser(Parser):
     def expr(self, p):
         return p.expr0 / p.expr1
 
-    # https://sly.readthedocs.io/en/latest/sly.html#dealing-with-ambiguous-grammars
-    # `%prec UMINUS` is the way to override the `precedence` of MINUS to UMINUS.
     @_('MINUS expr %prec UMINUS')
     def expr(self, p):
         return -p.expr
@@ -70,55 +81,167 @@ class MyParser(Parser):
         return int(p.NUMBER)
 
 
-from components.ast.statement import (
-    Expression,
-    Expression_math,
-    Expression_number,
-    Expression_float,
-    Expression_boolean,
-    Expression_string,
-    Expression_variable,
-    Expression_compare,
-    Operations,
-    CompareOperations
-)
 class ASTParser(Parser):
-    debugfile = 'parser.out'
-    start = 'statement'
-    # Get the token list from the lexer (required)
+    debugfile = "parser.out"
+    start = "program"
     tokens = MyLexer.tokens
     precedence = (
-    ('left', LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL),
-    ('left', PLUS, MINUS),
-    ('left', TIMES, DIVIDE),
-    ('right', UMINUS),
+        ("left", LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL),
+        ("left", PLUS, MINUS),
+        ("left", TIMES, DIVIDE),
+        ("right", UMINUS),
     )
 
+    @_('statements')
+    def program(self, p):
+        return Statement_block(p.statements)
+
+    @_('')
+    def program(self, p):
+        return Statement_block([])
+
+    @_('statements statement')
+    def statements(self, p):
+        return p.statements + [p.statement]
+
+    @_('statement')
+    def statements(self, p):
+        return [p.statement]
+
+    @_('assignment_statement')
+    def statement(self, p):
+        return p.assignment_statement
+
+    @_('print_statement')
+    def statement(self, p):
+        return p.print_statement
+
+    @_('if_statement')
+    def statement(self, p):
+        return p.if_statement
+
+    @_('while_statement')
+    def statement(self, p):
+        return p.while_statement
+
+    @_('function_statement')
+    def statement(self, p):
+        return p.function_statement
+
+    @_('return_statement')
+    def statement(self, p):
+        return p.return_statement
+
+    @_('block')
+    def statement(self, p):
+        return p.block
+
+    @_('expr SEMI')
+    def statement(self, p):
+        return Statement_expression(p.expr)
+
     @_('expr')
-    def statement(self, p) -> int:
-        p.expr.run()
-        return p.expr.value
+    def statement(self, p):
+        return Statement_expression(p.expr)
+
+    @_('NAME ASSIGN expr SEMI')
+    def assignment_statement(self, p):
+        return Statement_assignment(variable_name=p.NAME, expression=p.expr)
+
+    @_('NAME ASSIGN expr')
+    def assignment_statement(self, p):
+        return Statement_assignment(variable_name=p.NAME, expression=p.expr)
+
+    @_('PRINT LPAREN expr RPAREN SEMI')
+    def print_statement(self, p):
+        return Statement_print(expression=p.expr)
+
+    @_('IF LPAREN expr RPAREN block ELSE block')
+    def if_statement(self, p):
+        return Statement_if(condition=p.expr, then_block=p.block0, else_block=p.block1)
+
+    @_('IF LPAREN expr RPAREN block')
+    def if_statement(self, p):
+        return Statement_if(condition=p.expr, then_block=p.block)
+
+    @_('WHILE LPAREN expr RPAREN block')
+    def while_statement(self, p):
+        return Statement_while(condition=p.expr, body=p.block)
+
+    @_('FUNC NAME LPAREN parameters RPAREN block')
+    def function_statement(self, p):
+        return Statement_function(
+            function_name=p.NAME,
+            parameters=p.parameters,
+            body=p.block,
+        )
+
+    @_('RETURN expr SEMI')
+    def return_statement(self, p):
+        return Statement_return(expression=p.expr)
+
+    @_('LBRACE statements RBRACE')
+    def block(self, p):
+        return Statement_block(p.statements)
+
+    @_('LBRACE RBRACE')
+    def block(self, p):
+        return Statement_block([])
+
+    @_('parameter_items')
+    def parameters(self, p):
+        return p.parameter_items
+
+    @_('')
+    def parameters(self, p):
+        return []
+
+    @_('parameter_items COMMA NAME')
+    def parameter_items(self, p):
+        return p.parameter_items + [p.NAME]
+
+    @_('NAME')
+    def parameter_items(self, p):
+        return [p.NAME]
+
+    @_('argument_items')
+    def arguments(self, p):
+        return p.argument_items
+
+    @_('')
+    def arguments(self, p):
+        return []
+
+    @_('argument_items COMMA expr')
+    def argument_items(self, p):
+        return p.argument_items + [p.expr]
+
+    @_('expr')
+    def argument_items(self, p):
+        return [p.expr]
 
     @_('expr PLUS expr')
     def expr(self, p) -> Expression:
-        parameter1 = p.expr0
-        parameter2 = p.expr1
-        expr = Expression_math(operation=Operations.PLUS, parameter1=parameter1, parameter2=parameter2)
-        return expr
-    
+        return Expression_math(
+            operation=Operations.PLUS,
+            parameter1=p.expr0,
+            parameter2=p.expr1,
+        )
+
     @_('expr MINUS expr')
     def expr(self, p) -> Expression:
-        parameter1 = p.expr0
-        parameter2 = p.expr1
-        expr = Expression_math(operation=Operations.MINUS, parameter1=parameter1, parameter2=parameter2)
-        return expr
-    
+        return Expression_math(
+            operation=Operations.MINUS,
+            parameter1=p.expr0,
+            parameter2=p.expr1,
+        )
+
     @_('expr TIMES expr')
     def expr(self, p) -> Expression:
         return Expression_math(
             operation=Operations.TIMES,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
 
     @_('expr DIVIDE expr')
@@ -126,84 +249,55 @@ class ASTParser(Parser):
         return Expression_math(
             operation=Operations.DIVIDE,
             parameter1=p.expr0,
-            parameter2=p.expr1
-        )
-    @_('FLOAT')
-    def expr(self, p) -> Expression:
-        return Expression_float(number=p.FLOAT)
-
-    @_('TRUE')
-    def expr(self, p) -> Expression:
-        return Expression_boolean(True)
-
-    @_('FALSE')
-    def expr(self, p) -> Expression:
-        return Expression_boolean(False)
-
-    @_('NUMBER')
-    def expr(self, p) -> Expression:
-        return Expression_number(number=p.NUMBER)
-        
-    @_('STRING')
-    def expr(self, p) -> Expression:
-        return Expression_string(text=p.STRING) 
-    
-    @_('NAME')
-    def expr(self, p) -> Expression:
-        return Expression_variable(
-            variable_name=p.NAME
+            parameter2=p.expr1,
         )
 
-    @_('LPAREN expr RPAREN')
-    def expr(self, p):
-        return p.expr
-    
     @_('MINUS expr %prec UMINUS')
     def expr(self, p):
         return Expression_math(
             operation=Operations.MINUS,
             parameter1=Expression_number(0),
-            parameter2=p.expr
+            parameter2=p.expr,
         )
-    
+
     @_('expr LESS expr')
     def expr(self, p):
         return Expression_compare(
             operation=CompareOperations.LESS,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
-    
+
     @_('expr LESS_EQUAL expr')
     def expr(self, p):
         return Expression_compare(
             operation=CompareOperations.LESS_EQUAL,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
-        
+
     @_('expr GREATER expr')
     def expr(self, p):
         return Expression_compare(
             operation=CompareOperations.GREATER,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
-    
+
     @_('expr GREATER_EQUAL expr')
     def expr(self, p):
         return Expression_compare(
             operation=CompareOperations.GREATER_EQUAL,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
-    
+
     @_('expr EQUAL expr')
     def expr(self, p):
         return Expression_compare(
             operation=CompareOperations.EQUAL,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
 
     @_('expr NOT_EQUAL expr')
@@ -211,59 +305,52 @@ class ASTParser(Parser):
         return Expression_compare(
             operation=CompareOperations.NOT_EQUAL,
             parameter1=p.expr0,
-            parameter2=p.expr1
+            parameter2=p.expr1,
         )
+
+    @_('NAME LPAREN arguments RPAREN')
+    def expr(self, p):
+        return Expression_call(function_name=p.NAME, arguments=p.arguments)
+
+    @_('FLOAT')
+    def expr(self, p):
+        return Expression_float(number=p.FLOAT)
+
+    @_('TRUE')
+    def expr(self, p):
+        return Expression_boolean(True)
+
+    @_('FALSE')
+    def expr(self, p):
+        return Expression_boolean(False)
+
+    @_('NUMBER')
+    def expr(self, p):
+        return Expression_number(number=p.NUMBER)
+
+    @_('STRING')
+    def expr(self, p):
+        return Expression_string(text=p.STRING)
+
+    @_('NAME')
+    def expr(self, p):
+        return Expression_variable(variable_name=p.NAME)
+
+    @_('LPAREN expr RPAREN')
+    def expr(self, p):
+        return p.expr
+
+
 if __name__ == "__main__":
-    lexer = MyLexer()
-    # parser = MyParser()
-    text = "9 + 2 + 3"
-    memory = Memory()
-    parser = ASTParser()
-    # text = "1 + 2 + 3"
-    def run_test(text, expected):
-        lexer = MyLexer()
-        parser = ASTParser()
+    def parse_and_run(text):
+        memory = Memory()
+        memory.reset()
+        tree = ASTParser().parse(MyLexer().tokenize(text))
+        result = tree.run(memory)
+        return result, memory
 
-        result = parser.parse(lexer.tokenize(text))
-
-        assert result == expected, (
-            f"FAILED: {text}\n"
-            f"Expected: {expected}\n"
-            f"Got: {result}"
-        )
-
-        print(f"PASSED: {text} -> {result}")
-    # Arithmetic
-    run_test("5 + 3", 8)
-    run_test("10 - 2", 8)
-
-    # Precedence
-    run_test("5 + 3 * 2", 11)
-    run_test("(5 + 3) * 2", 16)
-
-    # Float
-    run_test("3.5 + 2.5", 6.0)
-
-    # Comparison
-    run_test("5 < 10", True)
-    run_test("5 == 5", True)
-
-    # Boolean
-    run_test("true", True)
-
-    # String
-    run_test('"hello"', "hello")
-
-    # Type error test
-    try:
-        run_test('5 + "hello"', None)
-        assert False, "Expected TypeError"
-
-    except TypeError:
-        print("PASSED: Type mismatch detected")
-
-    print("\nAll tests passed.")
-
-    result = parser.parse(lexer.tokenize(text))
+    result, memory = parse_and_run("x = 1; while (x < 3) { print(x); x = x + 1; }")
+    assert memory.output == ["1", "2"]
+    assert memory.get("x") == 3
     print(result)
-    # print(memory)
+    print(memory)
