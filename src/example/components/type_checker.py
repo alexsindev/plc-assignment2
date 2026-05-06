@@ -10,6 +10,7 @@ from .ast.statement import (
     Expression_compare,
     Expression_float,
     Expression_math,
+    Expression_negate,
     Expression_number,
     Expression_string,
     Expression_variable,
@@ -74,6 +75,11 @@ class TypeChecker:
             if expr.variable_name not in self._vars:
                 raise NameError(f"'{expr.variable_name}' used before assignment")
             return self._vars[expr.variable_name]
+        if isinstance(expr, Expression_negate):
+            t = self._infer(expr.operand)
+            if t not in (DataType.INT, DataType.FLOAT):
+                raise TypeError(f"Unary minus does not support {t.value}")
+            return t
         if isinstance(expr, Expression_math):
             return self._infer_math(expr)
         if isinstance(expr, Expression_compare):
@@ -143,7 +149,9 @@ class TypeChecker:
         for param, ptype in zip(sig.func_stmt.parameters, sig.param_types or []):
             self._vars[param] = ptype
 
-        return_types = self._collect_returns(sig.func_stmt.body)
+        # Pass 1: collect return types, seeding sig.return_type from the first
+        # non-VOID return so recursive calls resolve correctly on the same pass.
+        return_types = self._collect_returns(sig.func_stmt.body, sig)
 
         unique = set(return_types)
         if len(unique) > 1:
@@ -153,28 +161,34 @@ class TypeChecker:
             )
         sig.return_type = return_types[0] if return_types else DataType.VOID
 
+        # Pass 2: type-check all non-return statements (assignments, print,
+        # bare expressions) that _collect_returns skips.
+        self._check_block(sig.func_stmt.body)
+
         self._vars = saved_vars
         self._in_progress.discard(name)
 
-    def _collect_returns(self, block: Statement_block) -> list[DataType]:
-        """Recursively gather the DataType of every return statement in a block."""
+    def _collect_returns(self, block: Statement_block, sig: _FuncSig | None = None) -> list[DataType]:
         result: list[DataType] = []
         for stmt in block.statements:
-            result.extend(self._returns_in(stmt))
+            result.extend(self._returns_in(stmt, sig))
         return result
 
-    def _returns_in(self, stmt: Statement) -> list[DataType]:
+    def _returns_in(self, stmt: Statement, sig: _FuncSig | None = None) -> list[DataType]:
         if isinstance(stmt, Statement_return):
-            return [self._infer(stmt.expression)]
+            t = self._infer(stmt.expression)
+            if sig is not None and sig.return_type is None and t != DataType.VOID:
+                sig.return_type = t
+            return [t]
         if isinstance(stmt, Statement_if):
-            found = self._collect_returns(stmt.then_block)
+            found = self._collect_returns(stmt.then_block, sig)
             if stmt.else_block:
-                found += self._collect_returns(stmt.else_block)
+                found += self._collect_returns(stmt.else_block, sig)
             return found
         if isinstance(stmt, Statement_while):
-            return self._collect_returns(stmt.body)
+            return self._collect_returns(stmt.body, sig)
         if isinstance(stmt, Statement_block):
-            return self._collect_returns(stmt)
+            return self._collect_returns(stmt, sig)
         return []
 
     # ------------------------------------------------------------------

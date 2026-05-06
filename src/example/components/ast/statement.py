@@ -197,6 +197,23 @@ class Expression_call(Expression):
         return f"Expression_call:{self.function_name}"
 
 
+class Expression_negate(Expression):
+    def __init__(self, operand: Expression) -> None:
+        super().__init__()
+        self.operand = operand
+
+    def run(self, memory: Memory | None = None) -> object:
+        v = self.operand.run(memory)
+        self.data_type = self.operand.data_type
+        if self.data_type not in (DataType.INT, DataType.FLOAT):
+            raise TypeError(f"Unary minus does not support {self.data_type.value}")
+        self.value = -v
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_negate({self.operand!r})"
+
+
 class Expression_compare(Expression):
     def __init__(
         self,

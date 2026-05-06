@@ -8,6 +8,7 @@ from components.ast.statement import (
     Expression_compare,
     Expression_float,
     Expression_math,
+    Expression_negate,
     Expression_number,
     Expression_string,
     Expression_variable,
@@ -198,11 +199,7 @@ class ASTParser(Parser):
 
     @_('MINUS expr %prec UMINUS')
     def expr(self, p):
-        return Expression_math(
-            operation=Operations.MINUS,
-            parameter1=Expression_number(0),
-            parameter2=p.expr,
-        )
+        return Expression_negate(p.expr)
 
     @_('expr LESS expr')
     def expr(self, p):
