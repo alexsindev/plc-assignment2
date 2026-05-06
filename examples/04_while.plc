@@ -1,0 +1,17 @@
+i = 1;
+sum = 0;
+
+while (i < 6) {
+    sum = sum + i;
+    i = i + 1;
+}
+
+print(sum);
+
+n = 1;
+
+while (n < 100) {
+    n = n * 2;
+}
+
+print(n);

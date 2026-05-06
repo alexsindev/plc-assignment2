@@ -70,36 +70,32 @@ class Expression_math(Expression):
         self.children = [self.parameter1, self.parameter2]
 
     def run(self, memory: Memory | None = None) -> object:
-        for child in self.children:
-            child.run(memory)
+        v1 = self.parameter1.run(memory)
+        t1 = self.parameter1.data_type
+        v2 = self.parameter2.run(memory)
+        t2 = self.parameter2.data_type
 
-        if self.parameter1.data_type != self.parameter2.data_type:
-            raise TypeError(
-                f"Type mismatch: {self.parameter1.data_type} and {self.parameter2.data_type}"
-            )
-
-        if self.parameter1.data_type not in [DataType.INT, DataType.FLOAT]:
+        if t1 != t2:
+            raise TypeError(f"Type mismatch: {t1} and {t2}")
+        if t1 not in [DataType.INT, DataType.FLOAT]:
             raise TypeError("Arithmetic operations only support int and float")
 
         if self.operation == Operations.PLUS:
-            self.value = self.parameter1.value + self.parameter2.value
-            self.data_type = self.parameter1.data_type
+            self.value = v1 + v2
+            self.data_type = t1
         elif self.operation == Operations.MINUS:
-            self.value = self.parameter1.value - self.parameter2.value
-            self.data_type = self.parameter1.data_type
+            self.value = v1 - v2
+            self.data_type = t1
         elif self.operation == Operations.TIMES:
-            self.value = self.parameter1.value * self.parameter2.value
-            self.data_type = self.parameter1.data_type
+            self.value = v1 * v2
+            self.data_type = t1
         elif self.operation == Operations.DIVIDE:
-            self.value = self.parameter1.value / self.parameter2.value
+            self.value = v1 / v2
             self.data_type = DataType.FLOAT
         else:
             raise ValueError(f"Unsupported arithmetic operation: {self.operation}")
 
-        self.signature = (
-            f"Expression_math({self.operation.name}, "
-            f"{self.parameter1.value}, {self.parameter2.value})"
-        )
+        self.signature = f"Expression_math({self.operation.name}, {v1}, {v2})"
         return self.value
 
     def __repr__(self) -> str:
@@ -218,17 +214,15 @@ class Expression_compare(Expression):
         self.data_type = DataType.BOOL
 
     def run(self, memory: Memory | None = None) -> object:
-        for child in self.children:
-            child.run(memory)
+        left = self.parameter1.run(memory)
+        t1 = self.parameter1.data_type
+        right = self.parameter2.run(memory)
+        t2 = self.parameter2.data_type
 
-        if self.parameter1.data_type != self.parameter2.data_type:
+        if t1 != t2:
             raise TypeError("Comparison type mismatch")
-
-        if self.parameter1.data_type not in [DataType.INT, DataType.FLOAT]:
+        if t1 not in [DataType.INT, DataType.FLOAT]:
             raise TypeError("Comparisons only support int and float operands")
-
-        left = self.parameter1.value
-        right = self.parameter2.value
 
         if self.operation == CompareOperations.LESS:
             self.value = left < right
