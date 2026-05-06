@@ -2,6 +2,13 @@
 
 This branch adds the AST-backed statement layer for the project language.
 
+## AST file layout
+
+- `src/example/components/ast/expression.py`
+  - expression nodes, `DataType`, arithmetic/comparison enums, and function signature metadata
+- `src/example/components/ast/statement.py`
+  - statement nodes and return-flow behavior
+
 ## Type model alignment
 
 - Statement code now uses the same `DataType` enum as the merged expression layer.
