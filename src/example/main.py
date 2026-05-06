@@ -1,13 +1,17 @@
 import sys
-from PySide6 import QtUiTools
-from PySide6.QtWidgets import QApplication, QLabel
-from PySide6.QtWidgets import QMainWindow, QPushButton, QLineEdit, QLCDNumber, QVBoxLayout, QWidget, QHBoxLayout, QPushButton, QPlainTextEdit, QTextEdit, QSplitter, QFileDialog, QMessageBox, QLabel
-from example.components.lexica import MyLexer
-from example.components.parsers import MyParser
-from example.components.memory import Memory
-from example.components.ui import Ui_MainWindow
-
+import io
+import contextlib
+import traceback
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget,
+    QHBoxLayout, QPlainTextEdit, QTextEdit, QSplitter, QFileDialog, QLabel,
+)
 from PySide6.QtCore import Qt
+from example.components.highlighter import PLCSyntaxHighlighter
+from example.components.lexica import MyLexer
+from example.components.parsers import ASTParser
+from example.components.memory import Memory
+from example.components.type_checker import TypeChecker
 
 class CompilerIDE(QMainWindow):
     def __init__(self):
@@ -66,6 +70,8 @@ class CompilerIDE(QMainWindow):
             font-size: 14px;
             padding: 8px;
         """)
+
+        self._highlighter = PLCSyntaxHighlighter(self.code_editor.document())
 
         main_splitter.addWidget(self.code_editor)
 
@@ -146,19 +152,40 @@ class CompilerIDE(QMainWindow):
     # RUN CODE
     # =========================
     def run_code(self):
-        code = self.code_editor.toPlainText()
+        code = self.code_editor.toPlainText().strip()
+        self.output_console.clear()
+        self.error_console.clear()
 
-        self.output_console.append("=== Running Program ===\n")
+        if not code:
+            return
+
+        parse_capture = io.StringIO()
 
         try:
-            # Temporary placeholder
-            self.output_console.append(code)
-            self.output_console.append(
-                "\nProgram executed successfully.\n"
-            )
+            memory = Memory()
+            memory.reset()
 
+            with contextlib.redirect_stdout(parse_capture), \
+                 contextlib.redirect_stderr(parse_capture):
+                tree = ASTParser().parse(MyLexer().tokenize(code))
+
+            if tree is None:
+                errors = parse_capture.getvalue().strip()
+                self.error_console.append(
+                    errors or "Syntax error: could not parse program."
+                )
+                return
+
+            TypeChecker().check(tree)
+            tree.run(memory)
+
+            for line in memory.output:
+                self.output_console.append(line)
+
+        except (TypeError, NameError, SyntaxError) as e:
+            self.error_console.append(f"{type(e).__name__}: {e}")
         except Exception as e:
-            self.error_console.append(str(e))
+            self.error_console.append(traceback.format_exc())
 
     # =========================
     # CLEAR CONSOLES

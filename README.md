@@ -1,162 +1,467 @@
-# Compiler Starter Project
+# PLC Assignment 2 — Custom Language Compiler
 
-- [Compiler Starter Project](#compiler-starter-project)
-  - [Dependencies](#dependencies)
-  - [Getting Started](#getting-started)
-    - [VSCode setup](#vscode-setup)
-    - [Running Debug](#running-debug)
-    - [Running `Task`](#running-task)
-    - [Installing dependency](#installing-dependency)
-  - [Code Explain](#code-explain)
-    - [components/lexica.py](#componentslexicapy)
-    - [components/parsers.py](#componentsparserspy)
-      - [MyParser class](#myparser-class)
-      - [ASTParser class](#astparser-class)
-    - [components/memory.py](#componentsmemorypy)
-    - [`main.py` and `components/main.ui`](#mainpy-and-componentsmainui)
-  - [Design a GUI](#design-a-gui)
+A statically typed, lexically scoped programming language implemented in Python using SLY (lex/yacc) and a PySide6 IDE.
 
-This is the starter project for the Programming Language and Compiler course @
-AIT. Since 2024, we use `Python`.
+---
+
+## Table of Contents
+
+- [Dependencies](#dependencies)
+- [Getting Started](#getting-started)
+- [Running the IDE](#running-the-ide)
+  - [VSCode Debugger](#vscode-debugger)
+  - [VSCode Task](#vscode-task)
+  - [Command Line](#command-line)
+- [Module Structure](#module-structure)
+- [Compiler Pipeline](#compiler-pipeline)
+- [Language Reference](#language-reference)
+  - [Types](#types)
+  - [Grammar](#grammar)
+  - [Typing](#typing)
+  - [Scoping](#scoping)
+  - [Parameter Passing](#parameter-passing)
+  - [Binding](#binding)
+  - [Known Limitations](#known-limitations)
+- [Example Programs](#example-programs)
+
+---
 
 ## Dependencies
 
-- Python version 3.9.18
-- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) for managing
-  project
-- `PySide6` for GUI development
+- Python 3.10+
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — project and environment management
+- `sly` (from git master) — lexer and LR parser
+- `PySide6` — IDE GUI
+
+---
 
 ## Getting Started
 
-As of January 2026, this project drop the support for `Docker`. We figure that
-it only make thing more complicated and decided to use `uv` and `vscode` to
-control the environment.
+```sh
+git clone <repo>
+cd plc-assignment2
+uv sync
+```
 
-To use this repository, follow below steps.
+---
 
-1. (Optional) Click `Use this template` on the top right of this page to clone
-   this to your repository.
-2. Clone the project to your local machine.
-3. Go to project folder and run `uv sync`.
+## Running the IDE
 
-### VSCode setup
+### VSCode Debugger
 
-The repository has a file `.vscode/extensions.json` which will automatically
-install extension for you. In case that this mechanism fails, here are the list
-of required extension.
+Open the Run and Debug panel (`Ctrl/Cmd + Shift + D`) and select **`[example] Python Debugger`**. This launches `src/example/main.py` with `debugpy` attached, so breakpoints in any module work.
 
-- `ms-python.python`
-- `ms-python.debugpy`
+The launch configuration is in [.vscode/launch.json](.vscode/launch.json):
 
-### Running Debug
+```json
+{
+  "name": "[example] Python Debugger",
+  "type": "debugpy",
+  "request": "launch",
+  "python": "${workspaceFolder}/.venv/bin/python",
+  "program": "main.py",
+  "cwd": "${workspaceFolder}/src/example/"
+}
+```
 
-The repository has support for running the code in debug mode. Check the
-`.vscode/launch.json`.
+### VSCode Task
 
-By default, you can run `[example] Python Debugger` option which launch the
-`src/example` module. We sort-of giving an example of how to create mulitple
-entrypoints by providing the second option `[project] Python Debugger` which is
-not ready to use until you create a module `src/project`.
+Open the command palette (`Ctrl/Cmd + Shift + P`), choose **Tasks: Run Task**, then **start app**. This runs `uv run main.py` from `src/example/`.
 
-### Running `Task`
+> The **start designer** and **compile designer** tasks exist in `.vscode/tasks.json` but are not needed — the GUI in `main.py` is built entirely in code, not from a `.ui` file. To change the UI, edit `main.py` directly.
 
-To execute the module, we provide `Tasks` under the `.vscode/tasks.json`. There
-are three tasks initially.
-
-1. **start app**: For launching the `example` project.
-2. **start designer**: For launching `PySide6-designer` app.
-3. **compile designer**: For compiling the `ui` file generated from the
-   `PySide6-designer`.
-
-To run them, you can do it from the command palette <kbd>Ctrl/Cmd</kbd> +
-<kbd>Shift</kbd> + <kbd>P</kbd>. Choose `Tasks: Run Task`, and choose the option
-will appear.
-
-### Installing dependency
-
-Most of the requirement should be sorted out with `uv sync`. However, for no
-obvious reason right now, `PySide6-designer` would not run within the `uv`
-context. You will need to install the `PySide6` library again using
-`pip install`.
+### Command Line
 
 ```sh
-pip install pyside6
+cd src/example
+uv run main.py
 ```
 
-When you are done with this project, you can remove them with this
+---
 
-```sh
-pip uninstall pyside6 PySide6_Addons PySide6_Essentials
+## Module Structure
+
+```
+src/example/
+├── main.py                       # IDE entry point (PySide6 GUI)
+└── components/
+    ├── lexica.py                 # Lexer  — source text → token stream
+    ├── parsers.py                # Parser — token stream → AST
+    ├── type_checker.py           # Static type checker — AST → type errors
+    ├── memory.py                 # Runtime memory — call stack, variables, functions
+    ├── highlighter.py            # PySide6 syntax highlighter
+    └── ast/
+        └── statement.py          # AST node definitions (expressions + statements)
+
+tests/
+└── test_statements.py            # Pytest suite
+
+examples/
+├── 01_types.plc
+├── 02_arithmetic.plc
+├── 03_if_else.plc
+├── 04_while.plc
+├── 05_functions.plc
+├── 06_static_type_binding.plc
+└── 07_static_scope_binding.plc
 ```
 
-## Code Explain
+### `lexica.py` — `MyLexer`
 
-Inside `src/example/` folder is all the code developed.
+Extends `sly.Lexer`. Converts source text into a stream of tokens. Keywords (`if`, `else`, `while`, `func`, `return`, `print`, `true`, `false`) are matched by remapping the `NAME` token via `NAME["keyword"] = TOKEN`.
 
-```txt
-compiler-starter-project/
-  |- components/
-      |- ast/
-          |- statement.py
-      |- lexica.py
-      |- main.ui
-      |- memory.py
-      |- parsers.py
-  |- main.py
+Tokens produced: `NUMBER`, `FLOAT`, `STRING`, `TRUE`, `FALSE`, `NAME`, `ASSIGN`, `PLUS`, `MINUS`, `TIMES`, `DIVIDE`, `LESS`, `LESS_EQUAL`, `GREATER`, `GREATER_EQUAL`, `EQUAL`, `NOT_EQUAL`, `LPAREN`, `RPAREN`, `LBRACE`, `RBRACE`, `COMMA`, `SEMI`, `IF`, `ELSE`, `WHILE`, `PRINT`, `FUNC`, `RETURN`.
+
+### `parsers.py` — `ASTParser`
+
+Extends `sly.Parser`. Implements an LR(1) parser with explicit operator precedence. Each grammar rule constructs and returns an AST node rather than evaluating immediately. The top-level rule returns a `Statement_block` representing the whole program.
+
+Operator precedence (lowest → highest):
+
+| Level | Operators | Associativity |
+|-------|-----------|---------------|
+| 1 | `==` `!=` `<` `<=` `>` `>=` | left |
+| 2 | `+` `-` | left |
+| 3 | `*` `/` | left |
+| 4 | unary `-` | right |
+
+### `ast/statement.py` — AST Nodes
+
+All AST nodes implement `run(memory) -> object`. Execution is tree-walking: calling `.run()` on the root `Statement_block` recursively evaluates the entire program.
+
+**Expression nodes** (return a value and set `self.data_type`):
+
+| Class | Description |
+|-------|-------------|
+| `Expression_number` | Integer literal |
+| `Expression_float` | Float literal |
+| `Expression_boolean` | Boolean literal |
+| `Expression_string` | String literal |
+| `Expression_variable` | Variable read — looks up name in `Memory` |
+| `Expression_math` | Binary arithmetic (`+` `-` `*` `/`) |
+| `Expression_compare` | Binary comparison (`==` `!=` `<` `<=` `>` `>=`) |
+| `Expression_call` | Function call — evaluates arguments, invokes `Statement_function.invoke()` |
+
+**Statement nodes** (produce side effects):
+
+| Class | Description |
+|-------|-------------|
+| `Statement_assignment` | Binds a name to a value in the current memory frame |
+| `Statement_print` | Evaluates expression and appends to `Memory.output` |
+| `Statement_if` | Conditional — evaluates condition, runs then or else block |
+| `Statement_while` | Loop — evaluates condition before each iteration |
+| `Statement_function` | Registers the function in `Memory.functions` |
+| `Statement_return` | Raises `ReturnSignal` (caught by `Statement_function.invoke`) |
+| `Statement_block` | Sequence of statements |
+| `Statement_expression` | Expression used as a statement (e.g. a bare call) |
+
+`ReturnSignal` is a custom exception used to unwind the call stack on `return`. It carries the return value and its `DataType`.
+
+### `memory.py` — `Memory`
+
+A singleton (via `__new__`) that holds the entire runtime state. Call `memory.reset()` before each program run.
+
+**Call stack**: `stack: list[dict]` where `stack[0]` is the global frame. `push_frame()` / `pop_frame()` are called on function entry and exit. Each frame entry is `{ name: { "value": ..., "type": DataType } }`.
+
+**Scope resolution** (`_lookup_frame`): checks the **current frame** first, then the **global frame** only — never intermediate frames. This enforces lexical scoping.
+
+**Type stability** (`set`): if a name already exists in the current frame with a different type, `TypeError` is raised. A variable's type cannot change within its scope.
+
+**Function registry**: functions are stored in `self.functions` (separate from the variable stack) and are globally accessible.
+
+### `type_checker.py` — `TypeChecker`
+
+A pre-execution static analysis pass. Call `TypeChecker().check(program)` on the parsed AST before calling `tree.run(memory)`. All type errors are raised before any side effects occur.
+
+**State:**
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `_vars` | `dict[str, DataType]` | Maps variable names to their locked type. Set on first assignment; used to enforce static type binding on every subsequent read or write. |
+| `_funcs` | `dict[str, _FuncSig]` | Maps function names to their signature record. Populated during the forward-reference pass so calls can appear before definitions. |
+| `_in_progress` | `set[str]` | Names of functions currently being body-checked. Guards against infinite recursion when a function calls itself. |
+
+**`_FuncSig` (dataclass):** holds a reference to the `Statement_function` AST node alongside the inferred `param_types` and `return_type`. Both start as `None` and are filled in on the first call to the function.
+
+---
+
+**`check(program)`** — public entry point. Runs two top-level passes over the program block:
+
+1. **Forward-reference pass** — registers every top-level `Statement_function` in `_funcs` before any statement is checked. This allows a function to be called before its definition appears in the source.
+2. **Check pass** — iterates every statement through `_check_stmt`.
+
+---
+
+**`_infer(expr) → DataType`** — central dispatch for expression type inference. Matches on the expression node type and returns its `DataType` without executing anything:
+
+- `Expression_number` → `INT`
+- `Expression_float` → `FLOAT`
+- `Expression_boolean` → `BOOL`
+- `Expression_string` → `STRING`
+- `Expression_variable` → looks up `_vars[name]`; raises `NameError` if the variable has not been assigned yet
+- `Expression_negate` → delegates to `_infer` on the operand; enforces numeric-only; returns the operand's type unchanged
+- `Expression_math` → delegates to `_infer_math`
+- `Expression_compare` → delegates to `_infer_compare`
+- `Expression_call` → delegates to `_infer_call`
+
+---
+
+**`_infer_math(expr) → DataType`** — type rule for binary arithmetic:
+
+1. Infers both operand types via `_infer`.
+2. Raises `TypeError` if the two types differ (no implicit coercion).
+3. Raises `TypeError` if the type is not `INT` or `FLOAT` (arithmetic is numeric-only).
+4. Returns `FLOAT` unconditionally when the operator is `/`, otherwise returns the operand type. This is the static rule that makes `int / int` always `float` regardless of runtime value.
+
+---
+
+**`_infer_compare(expr) → DataType`** — type rule for binary comparison:
+
+1. Infers both operand types via `_infer`.
+2. Raises `TypeError` if the types differ.
+3. Raises `TypeError` if the type is not `INT` or `FLOAT` (strings and booleans are not comparable).
+4. Always returns `BOOL`.
+
+---
+
+**`_infer_call(expr) → DataType`** — type rule for function calls. This is the most complex inference step:
+
+1. Raises `NameError` if the function name is not in `_funcs`.
+2. Infers the type of each argument via `_infer`.
+3. Raises `TypeError` on arity mismatch.
+4. **First call:** locks `sig.param_types` to the inferred argument types.
+5. **Subsequent calls:** raises `TypeError` if the argument types differ from the locked signature — function types are stable after first inference.
+6. **Recursive call guard:** if the function name is already in `_in_progress`, returns `sig.return_type` (already seeded from the base case) instead of re-entering the body. This breaks the infinite recursion cycle.
+7. **First call, non-recursive:** calls `_check_func_body` to check the body with the now-known parameter types, then returns the inferred return type.
+
+---
+
+**`_check_func_body(sig)`** — checks a function body in two passes, operating inside a temporary scope where parameters are pre-loaded into `_vars`:
+
+- **Pass 1 — `_collect_returns`:** traverses every `return` statement in the body (recursing into `if`/`while`/blocks), infers the type of each returned expression, and verifies all return paths agree. As each return type is found, it is immediately written to `sig.return_type` — this seeds the type early so that recursive calls encountered in the same pass can resolve to the correct type rather than `VOID`.
+- **Pass 2 — `_check_block`:** walks every statement in the body through `_check_stmt`, catching type errors in assignments, `print` calls, and bare expressions that `_collect_returns` skips.
+
+The variable scope is saved before the two passes and restored afterwards, so local variables and parameters do not pollute the outer environment.
+
+---
+
+**`_collect_returns(block, sig) → list[DataType]`** — recursively gathers the `DataType` of every `return` statement reachable from `block`. Delegates each statement to `_returns_in`. The `sig` parameter is threaded through so `_returns_in` can seed `sig.return_type` incrementally.
+
+---
+
+**`_returns_in(stmt, sig) → list[DataType]`** — extracts return types from a single statement:
+
+- `Statement_return` — infers the expression type; if `sig.return_type` is not yet set, sets it immediately (base-case seeding for recursive functions).
+- `Statement_if` — recurses into the then-block and, if present, the else-block.
+- `Statement_while` — recurses into the body.
+- `Statement_block` — recurses into the nested block.
+- All other statement types (assignments, `print`, etc.) — returns `[]`; these are handled separately by `_check_block` in Pass 2.
+
+---
+
+**`_check_stmt(stmt)`** — type-checks a single statement and updates `_vars` where applicable:
+
+- `Statement_assignment` — infers the RHS expression type; raises `TypeError` if the variable already exists in `_vars` with a different type; otherwise records the type in `_vars`.
+- `Statement_print` — infers the expression type (validates it is well-typed; the type itself is not restricted here).
+- `Statement_if` — infers the condition; raises `TypeError` if it is not `BOOL`; then calls `_check_block` on each branch.
+- `Statement_while` — infers the condition; raises `TypeError` if it is not `BOOL`; then calls `_check_block` on the body.
+- `Statement_return` — infers the expression type (validates it is well-typed).
+- `Statement_function` — registers the function in `_funcs` if not already present (handles functions defined inside blocks, though the runtime restricts these to global scope).
+- `Statement_expression` — infers the expression type to catch errors in bare calls.
+- `Statement_block` — delegates to `_check_block`.
+
+---
+
+**`_check_block(block)`** — iterates every statement in a `Statement_block` through `_check_stmt`. The shared entry point for checking any sequence of statements, used by `_check_func_body` (Pass 2), `_check_stmt` for `if`/`while` branches, and `check` itself.
+
+---
+
+**Known gaps (by design):**
+
+| Gap | Reason |
+|-----|--------|
+| Uncalled functions are not type-checked | Parameter types are inferred from the call site; with no call, there is nothing to infer from |
+| Variables assigned in only one branch of `if`/`while` may not exist at runtime | Fixing this requires flow-sensitive typing, which is out of scope |
+
+### `highlighter.py` — `PLCSyntaxHighlighter`
+
+Extends `QSyntaxHighlighter`. Applies `QRegularExpression` rules per line for keywords, literals, booleans, numbers, and strings in VSCode Dark+ colours.
+
+### `main.py` — `CompilerIDE`
+
+A `QMainWindow` with:
+- Left pane: `QPlainTextEdit` code editor with syntax highlighting.
+- Top-right pane: program output console.
+- Bottom-right pane: error console.
+- Toolbar: **Run**, **Clear**, **Open**, **Save**.
+
+**Run pipeline** (inside `run_code()`):
+
+```
+source text
+    → MyLexer().tokenize()       # token stream
+    → ASTParser().parse()        # Statement_block (AST)
+    → TypeChecker().check()      # static type errors raised here
+    → tree.run(memory)           # execution; output collected in memory.output
 ```
 
-Since the project is done just to showcase libraries and techniques, here we
-divided it into subsections to explain the code.
+Parse errors printed to stdout/stderr by SLY are captured with `contextlib.redirect_stdout/stderr` and routed to the error console.
 
-### components/lexica.py
+---
 
-This file showcases the Lexica analyzer component. It has a `MyLexer` class that
-extends `sly.Lexer`. It will translate a code/string into `token`
-stream/generator that feeds to a `Parser`. This file has a main just for testing
-the class.
+## Compiler Pipeline
 
-### components/parsers.py
+```
+Source text
+    │
+    ▼
+MyLexer.tokenize()          →  token stream (generator)
+    │
+    ▼
+ASTParser.parse()           →  Statement_block (root AST node)
+    │
+    ▼
+TypeChecker.check()         →  raises TypeError / NameError on violations
+    │
+    ▼
+Statement_block.run(memory) →  tree-walking interpreter
+    │
+    ▼
+memory.output               →  list of printed strings → GUI output pane
+```
 
-There are two parsers. (1) `MyParser` and (2) `ASTParser`.
+---
 
-#### MyParser class
+## Language Reference
 
-This class is what I call immediate evaluation which each of the semantics, once
-reduced, evaluates/calculates right away. This type of parser is fine for
-calculator projects or simple parsing. This parser also implements
-[`Memory`](#componentsmemorypy) and `Variable assignment`.
+### Types
 
-#### ASTParser class
+| Type | Literal examples |
+|------|-----------------|
+| `int` | `0`, `42`, `-7` |
+| `float` | `3.14`, `0.5` |
+| `bool` | `true`, `false` |
+| `string` | `"hello"` |
+| `void` | (return type of functions with no return) |
 
-This is a more complex but flexible way of parsing.
-[AST (Abstract Syntax Trees)](https://en.wikipedia.org/wiki/Abstract_syntax_tree)
-is actually a parse tree. This will allow you to control when to run a
-subsection of code like `if-else` statement. You can see that the semantic part
-is only creating an object inside `components.ast`. All the logic (in this case,
-addition and subtraction) is in the AST object. The Parser is there is create a
-parse tree that once ready will execute `.run()`. I only add the essentials to
-demonstrate this technique.
+### Grammar
 
-### components/memory.py
+```
+<program>   ::= <stmts>
 
-This contains `Memory` class which is a singleton. Inside is just a simple
-dictionary where `variable_name` is a key and
-`{'value':value,'data_type':<type>}` as a value. Whether this solution is
-appropriate or not is your judgment.
+<stmts>     ::= <stmts> <stmt> | ε
 
-### `main.py` and `components/main.ui`
+<stmt>      ::= NAME ASSIGN <expr> SEMI
+              | IF LPAREN <expr> RPAREN <block>
+              | IF LPAREN <expr> RPAREN <block> ELSE <block>
+              | WHILE LPAREN <expr> RPAREN <block>
+              | PRINT LPAREN <expr> RPAREN SEMI
+              | FUNC NAME LPAREN <params> RPAREN <block>
+              | RETURN <expr> SEMI
+              | <expr> SEMI
 
-Finally, the `main.py` is the main file to run the entire project. It will
-render a GUI from `components/main.ui` that was designed from `PyQt6`. This
-shows how to bind a function with a button and how to display the result back to
-the GUI.
+<block>     ::= LBRACE <stmts> RBRACE
 
-## Design a GUI
+<params>    ::= <params> COMMA NAME | NAME | ε
 
-We use `PySide6` and `pyside6-designer` for GUI development. You can start to
-learn this tool from
+<expr>      ::= <expr> PLUS <expr>
+              | <expr> MINUS <expr>
+              | <expr> TIMES <expr>
+              | <expr> DIVIDE <expr>
+              | <expr> EQUAL <expr>
+              | <expr> NOT_EQUAL <expr>
+              | <expr> LESS <expr>
+              | <expr> LESS_EQUAL <expr>
+              | <expr> GREATER <expr>
+              | <expr> GREATER_EQUAL <expr>
+              | MINUS <expr>
+              | LPAREN <expr> RPAREN
+              | NAME LPAREN <args> RPAREN
+              | NAME
+              | NUMBER | FLOAT | TRUE | FALSE | STRING
 
-- [Official Document](https://doc.qt.io/qtforpython-6/tools/pyside-designer.html)
-- [3rd party Tutorial](https://www.pythonguis.com/tutorials/pyside6-first-steps-qt-designer/)
+<args>      ::= <args> COMMA <expr> | <expr> | ε
+```
 
-To launch the designer, use [Running `Task`](#running-task)
+### Typing
+
+The language is **statically typed with type inference** — no explicit type annotations are written. Types are inferred from usage.
+
+- A variable's type is determined at its **first assignment** and cannot change.
+- Arithmetic (`+` `-` `*` `/`) requires both operands to be the same type (`int` or `float`). No implicit coercion.
+- Division (`/`) always produces `float`, even when both operands are `int`. The return type is determined statically by the operator, not by the runtime value.
+- Comparisons (`==` `!=` `<` `<=` `>` `>=`) require both operands to be the same numeric type and always produce `bool`.
+- `if` and `while` conditions must be `bool`.
+- Function parameter types and return type are inferred at the **first call site** and locked for all subsequent calls.
+- Type checking runs as a **pre-execution pass** (`TypeChecker`). Type errors are reported before any side effects occur.
+
+### Scoping
+
+The language uses **static (lexical) scoping**. A name is resolved in the environment where the function is **defined**, not where it is called.
+
+The call stack (`Memory.stack`) holds frames, but name lookup (`_lookup_frame`) only ever checks two places: the **current function's frame** and the **global frame**. Intermediate caller frames are never visible.
+
+```
+x = 1;
+
+func inner() {
+    print(x);   # resolves x in global frame → 1
+}
+
+func outer() {
+    x = 99;     # local to outer's frame
+    inner();    # prints 1, not 99
+}
+
+outer();
+```
+
+A dynamically scoped language would make `inner` inherit `outer`'s `x = 99` and print `99`.
+
+Functions are defined at **global scope only**. Nested function definitions are not permitted.
+
+### Parameter Passing
+
+Arguments are passed **by value**. At the call site, each argument expression is fully evaluated and the resulting value is copied into the callee's local frame. Modifying a parameter inside a function has no effect on the caller's variable.
+
+```
+x = 10;
+
+func double(n) {
+    n = n * 2;   # modifies local copy only
+    return n;
+}
+
+print(double(x));   # 20
+print(x);           # 10 — unchanged
+```
+
+### Binding
+
+**Static variable binding** — a variable name is bound to exactly one type for its lifetime. The binding is established at first assignment and never changes.
+
+**Static type binding** — the type of an expression is determined at compile time from the types of its operands, not from runtime values. The clearest example is division: `int / int` always produces `float` by static rule, even when the result is a whole number (`10 / 2 = 5.0`, not `5`).
+
+**Static scope binding** — as described under [Scoping](#scoping), the scope chain is fixed at definition time.
+
+### Known Limitations
+
+- **Uncalled functions are not type-checked.** Because parameter types are inferred from call sites, a function that is never called has no type information to check against. Type errors in its body will not be caught statically. This is an inherent consequence of the inference strategy and is left as future work.
+- **Branch-conditional variables.** A variable assigned only inside an `if` branch is added to the type environment by the type checker regardless of which branch executes. If the branch is not taken at runtime, accessing the variable will raise a `NameError`. Fixing this requires flow-sensitive typing.
+
+---
+
+## Example Programs
+
+All examples are in the [`examples/`](examples/) directory and can be opened directly in the IDE.
+
+| File | Demonstrates |
+|------|-------------|
+| `01_types.plc` | All four value types |
+| `02_arithmetic.plc` | Arithmetic operators and precedence |
+| `03_if_else.plc` | Conditional branching |
+| `04_while.plc` | While loops |
+| `05_functions.plc` | Function definition, recursion |
+| `06_static_type_binding.plc` | Static vs dynamic type binding — how division always returns `float` |
+| `07_static_scope_binding.plc` | Static vs dynamic scope — how callees resolve names from definition site |
+| `08_pass_by_value.plc` | Pass by value — mutating a parameter inside a function does not affect the caller |

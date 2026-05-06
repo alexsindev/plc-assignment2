@@ -1,0 +1,15 @@
+a = 10;
+b = 3;
+
+print(a + b);
+print(a - b);
+print(a * b);
+
+result = a + b * 2;
+print(result);
+
+result = (a + b) * 2;
+print(result);
+
+quotient = 7.0 / 2.0;
+print(quotient);

@@ -8,6 +8,7 @@ from components.ast.statement import (
     Expression_compare,
     Expression_float,
     Expression_math,
+    Expression_negate,
     Expression_number,
     Expression_string,
     Expression_variable,
@@ -22,63 +23,7 @@ from components.ast.statement import (
     Statement_while,
 )
 from components.lexica import MyLexer
-from components.memory import Memory
 
-
-class MyParser(Parser):
-    """Legacy immediate-evaluation parser kept for the calculator GUI."""
-
-    debugfile = "parser.out"
-    start = "statement"
-    tokens = MyLexer.tokens
-    precedence = (
-        ("left", LESS, LESS_EQUAL, GREATER, GREATER_EQUAL, EQUAL, NOT_EQUAL),
-        ("left", PLUS, MINUS),
-        ("left", TIMES, DIVIDE),
-        ("right", UMINUS),
-    )
-
-    def __init__(self):
-        self.memory = Memory()
-
-    @_('NAME ASSIGN expr')
-    def statement(self, p):
-        var_name = p.NAME
-        value = p.expr
-        self.memory.set(name=var_name, value=value, data_type=type(value))
-        return value
-
-    @_('expr')
-    def statement(self, p):
-        return p.expr
-
-    @_('expr PLUS expr')
-    def expr(self, p):
-        return p.expr0 + p.expr1
-
-    @_('expr MINUS expr')
-    def expr(self, p):
-        return p.expr0 - p.expr1
-
-    @_('expr TIMES expr')
-    def expr(self, p):
-        return p.expr0 * p.expr1
-
-    @_('expr DIVIDE expr')
-    def expr(self, p):
-        return p.expr0 / p.expr1
-
-    @_('MINUS expr %prec UMINUS')
-    def expr(self, p):
-        return -p.expr
-
-    @_('LPAREN expr RPAREN')
-    def expr(self, p):
-        return p.expr
-
-    @_('NUMBER')
-    def expr(self, p):
-        return int(p.NUMBER)
 
 
 class ASTParser(Parser):
@@ -254,11 +199,7 @@ class ASTParser(Parser):
 
     @_('MINUS expr %prec UMINUS')
     def expr(self, p):
-        return Expression_math(
-            operation=Operations.MINUS,
-            parameter1=Expression_number(0),
-            parameter2=p.expr,
-        )
+        return Expression_negate(p.expr)
 
     @_('expr LESS expr')
     def expr(self, p):
@@ -342,6 +283,8 @@ class ASTParser(Parser):
 
 
 if __name__ == "__main__":
+    from components.memory import Memory
+
     def parse_and_run(text):
         memory = Memory()
         memory.reset()

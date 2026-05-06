@@ -46,8 +46,7 @@ class ReturnSignal(Exception):
 
 class Statement(ABC):
     @abstractmethod
-    def run(self, memory: Memory | None = None) -> object:
-        raise NotImplementedError
+    def run(self, memory: Memory | None = None) -> object: ...
 
 
 class Expression(ABC):
@@ -57,8 +56,7 @@ class Expression(ABC):
         self.data_type: DataType | None = None
 
     @abstractmethod
-    def run(self, memory: Memory | None = None) -> object:
-        raise NotImplementedError
+    def run(self, memory: Memory | None = None) -> object: ...
 
 
 class Expression_math(Expression):
@@ -72,36 +70,32 @@ class Expression_math(Expression):
         self.children = [self.parameter1, self.parameter2]
 
     def run(self, memory: Memory | None = None) -> object:
-        for child in self.children:
-            child.run(memory)
+        v1 = self.parameter1.run(memory)
+        t1 = self.parameter1.data_type
+        v2 = self.parameter2.run(memory)
+        t2 = self.parameter2.data_type
 
-        if self.parameter1.data_type != self.parameter2.data_type:
-            raise TypeError(
-                f"Type mismatch: {self.parameter1.data_type} and {self.parameter2.data_type}"
-            )
-
-        if self.parameter1.data_type not in [DataType.INT, DataType.FLOAT]:
+        if t1 != t2:
+            raise TypeError(f"Type mismatch: {t1} and {t2}")
+        if t1 not in [DataType.INT, DataType.FLOAT]:
             raise TypeError("Arithmetic operations only support int and float")
 
         if self.operation == Operations.PLUS:
-            self.value = self.parameter1.value + self.parameter2.value
-            self.data_type = self.parameter1.data_type
+            self.value = v1 + v2
+            self.data_type = t1
         elif self.operation == Operations.MINUS:
-            self.value = self.parameter1.value - self.parameter2.value
-            self.data_type = self.parameter1.data_type
+            self.value = v1 - v2
+            self.data_type = t1
         elif self.operation == Operations.TIMES:
-            self.value = self.parameter1.value * self.parameter2.value
-            self.data_type = self.parameter1.data_type
+            self.value = v1 * v2
+            self.data_type = t1
         elif self.operation == Operations.DIVIDE:
-            self.value = self.parameter1.value / self.parameter2.value
+            self.value = v1 / v2
             self.data_type = DataType.FLOAT
         else:
             raise ValueError(f"Unsupported arithmetic operation: {self.operation}")
 
-        self.signature = (
-            f"Expression_math({self.operation.name}, "
-            f"{self.parameter1.value}, {self.parameter2.value})"
-        )
+        self.signature = f"Expression_math({self.operation.name}, {v1}, {v2})"
         return self.value
 
     def __repr__(self) -> str:
@@ -203,6 +197,23 @@ class Expression_call(Expression):
         return f"Expression_call:{self.function_name}"
 
 
+class Expression_negate(Expression):
+    def __init__(self, operand: Expression) -> None:
+        super().__init__()
+        self.operand = operand
+
+    def run(self, memory: Memory | None = None) -> object:
+        v = self.operand.run(memory)
+        self.data_type = self.operand.data_type
+        if self.data_type not in (DataType.INT, DataType.FLOAT):
+            raise TypeError(f"Unary minus does not support {self.data_type.value}")
+        self.value = -v
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_negate({self.operand!r})"
+
+
 class Expression_compare(Expression):
     def __init__(
         self,
@@ -220,17 +231,15 @@ class Expression_compare(Expression):
         self.data_type = DataType.BOOL
 
     def run(self, memory: Memory | None = None) -> object:
-        for child in self.children:
-            child.run(memory)
+        left = self.parameter1.run(memory)
+        t1 = self.parameter1.data_type
+        right = self.parameter2.run(memory)
+        t2 = self.parameter2.data_type
 
-        if self.parameter1.data_type != self.parameter2.data_type:
+        if t1 != t2:
             raise TypeError("Comparison type mismatch")
-
-        if self.parameter1.data_type not in [DataType.INT, DataType.FLOAT]:
+        if t1 not in [DataType.INT, DataType.FLOAT]:
             raise TypeError("Comparisons only support int and float operands")
-
-        left = self.parameter1.value
-        right = self.parameter2.value
 
         if self.operation == CompareOperations.LESS:
             self.value = left < right
@@ -352,14 +361,13 @@ class Statement_while(Statement):
 
     def run(self, memory: Memory | None = None) -> object:
         mem = memory or Memory()
+        self.condition.run(mem)
+        if self.condition.data_type != DataType.BOOL:
+            raise TypeError("while condition must evaluate to bool")
         last_result = None
-        while True:
-            self.condition.run(mem)
-            if self.condition.data_type != DataType.BOOL:
-                raise TypeError("while condition must evaluate to bool")
-            if not self.condition.value:
-                break
+        while self.condition.value:
             last_result = self.body.run(mem)
+            self.condition.run(mem)
         return last_result
 
     def __repr__(self) -> str:
@@ -409,7 +417,6 @@ class Statement_function(Statement):
             )
 
         if self.function_type.parameter_types:
-            assert len(self.function_type.parameter_types) == len(argument_types)
             if self.function_type.parameter_types != argument_types:
                 raise TypeError(
                     f"Function '{self.function_name}' expects "
