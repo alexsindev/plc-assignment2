@@ -8,10 +8,12 @@ A statically typed, lexically scoped programming language implemented in Python 
 
 - [Dependencies](#dependencies)
 - [Getting Started](#getting-started)
+- [CI and Branch Protection](#ci-and-branch-protection)
 - [Running the IDE](#running-the-ide)
   - [VSCode Debugger](#vscode-debugger)
   - [VSCode Task](#vscode-task)
   - [Command Line](#command-line)
+- [Running Tests](#running-tests)
 - [Module Structure](#module-structure)
 - [Compiler Pipeline](#compiler-pipeline)
 - [Language Reference](#language-reference)
@@ -21,6 +23,7 @@ A statically typed, lexically scoped programming language implemented in Python 
   - [Scoping](#scoping)
   - [Parameter Passing](#parameter-passing)
   - [Binding](#binding)
+  - [Recursion](#recursion)
   - [Known Limitations](#known-limitations)
 - [Example Programs](#example-programs)
 
@@ -42,6 +45,20 @@ git clone <repo>
 cd plc-assignment2
 uv sync
 ```
+
+---
+
+## CI and Branch Protection
+
+A GitHub Actions workflow runs the full test suite on every pull request targeting `develop`. The workflow is defined in [.github/workflows/test.yml](.github/workflows/test.yml).
+
+To enforce that PRs cannot be merged until CI passes:
+
+1. Go to **Settings → Branches → Add branch protection rule**
+2. Set the branch name pattern to `develop`
+3. Enable **Require status checks to pass before merging**
+4. Add `test` (the job name) as a required status check
+5. Optionally enable **Require branches to be up to date before merging**
 
 ---
 
@@ -79,6 +96,26 @@ uv run main.py
 
 ---
 
+## Running Tests
+
+```sh
+uv run pytest tests/ -v
+```
+
+The test suite is split across five files:
+
+| File | Coverage |
+|------|----------|
+| `tests/test_lexer.py` | Token types, literal values, keyword vs name disambiguation |
+| `tests/test_parser.py` | AST node types and field values for every grammar rule |
+| `tests/test_expressions.py` | Expression evaluation, operator precedence, type errors |
+| `tests/test_statements.py` | Statement execution — happy path and error path for each statement type |
+| `tests/test_integration.py` | Full-pipeline tests grouped by language feature (type binding, scope binding, pass by value, functions, control flow) — each section has happy path and error path |
+
+Shared helpers (`parse`, `run_program`, `run_with_checker`, `assert_output`, `assert_raises`) are defined in `tests/conftest.py` and automatically available to all test files.
+
+---
+
 ## Module Structure
 
 ```
@@ -91,10 +128,15 @@ src/example/
     ├── memory.py                 # Runtime memory — call stack, variables, functions
     ├── highlighter.py            # PySide6 syntax highlighter
     └── ast/
-        └── statement.py          # AST node definitions (expressions + statements)
+        └── statement.py         # AST node definitions (expressions + statements)
 
 tests/
-└── test_statements.py            # Pytest suite
+├── conftest.py                   # Shared helpers and sys.path setup
+├── test_lexer.py
+├── test_parser.py
+├── test_expressions.py
+├── test_statements.py
+└── test_integration.py
 
 examples/
 ├── 01_types.plc
@@ -103,7 +145,8 @@ examples/
 ├── 04_while.plc
 ├── 05_functions.plc
 ├── 06_static_type_binding.plc
-└── 07_static_scope_binding.plc
+├── 07_static_scope_binding.plc
+└── 08_pass_by_value.plc
 ```
 
 ### `lexica.py` — `MyLexer`
@@ -114,7 +157,7 @@ Tokens produced: `NUMBER`, `FLOAT`, `STRING`, `TRUE`, `FALSE`, `NAME`, `ASSIGN`,
 
 ### `parsers.py` — `ASTParser`
 
-Extends `sly.Parser`. Implements an LR(1) parser with explicit operator precedence. Each grammar rule constructs and returns an AST node rather than evaluating immediately. The top-level rule returns a `Statement_block` representing the whole program.
+Extends `sly.Parser`. Implements an LR(1) parser with explicit operator precedence. Each grammar rule constructs and returns an AST node rather than evaluating immediately. The top-level rule returns a `Statement_block` representing the whole program. On syntax error, SLY error-recovers and returns an empty `Statement_block`.
 
 Operator precedence (lowest → highest):
 
@@ -138,6 +181,7 @@ All AST nodes implement `run(memory) -> object`. Execution is tree-walking: call
 | `Expression_boolean` | Boolean literal |
 | `Expression_string` | String literal |
 | `Expression_variable` | Variable read — looks up name in `Memory` |
+| `Expression_negate` | Unary minus — negates any numeric expression, preserving its type |
 | `Expression_math` | Binary arithmetic (`+` `-` `*` `/`) |
 | `Expression_compare` | Binary comparison (`==` `!=` `<` `<=` `>` `>=`) |
 | `Expression_call` | Function call — evaluates arguments, invokes `Statement_function.invoke()` |
@@ -156,6 +200,8 @@ All AST nodes implement `run(memory) -> object`. Execution is tree-walking: call
 | `Statement_expression` | Expression used as a statement (e.g. a bare call) |
 
 `ReturnSignal` is a custom exception used to unwind the call stack on `return`. It carries the return value and its `DataType`.
+
+`Expression_negate` exists as a dedicated node (rather than sugar for `0 - x`) so that unary minus on a float does not create a type mismatch between an `INT` zero and a `FLOAT` operand.
 
 ### `memory.py` — `Memory`
 
@@ -262,11 +308,11 @@ The variable scope is saved before the two passes and restored afterwards, so lo
 **`_check_stmt(stmt)`** — type-checks a single statement and updates `_vars` where applicable:
 
 - `Statement_assignment` — infers the RHS expression type; raises `TypeError` if the variable already exists in `_vars` with a different type; otherwise records the type in `_vars`.
-- `Statement_print` — infers the expression type (validates it is well-typed; the type itself is not restricted here).
+- `Statement_print` — infers the expression type (validates it is well-typed).
 - `Statement_if` — infers the condition; raises `TypeError` if it is not `BOOL`; then calls `_check_block` on each branch.
 - `Statement_while` — infers the condition; raises `TypeError` if it is not `BOOL`; then calls `_check_block` on the body.
 - `Statement_return` — infers the expression type (validates it is well-typed).
-- `Statement_function` — registers the function in `_funcs` if not already present (handles functions defined inside blocks, though the runtime restricts these to global scope).
+- `Statement_function` — registers the function in `_funcs` if not already present.
 - `Statement_expression` — infers the expression type to catch errors in bare calls.
 - `Statement_block` — delegates to `_check_block`.
 
@@ -339,10 +385,10 @@ memory.output               →  list of printed strings → GUI output pane
 | Type | Literal examples |
 |------|-----------------|
 | `int` | `0`, `42`, `-7` |
-| `float` | `3.14`, `0.5` |
+| `float` | `3.14`, `0.5`, `-1.0` |
 | `bool` | `true`, `false` |
 | `string` | `"hello"` |
-| `void` | (return type of functions with no return) |
+| `void` | (return type of functions with no return statement) |
 
 ### Grammar
 
@@ -385,15 +431,17 @@ memory.output               →  list of printed strings → GUI output pane
 
 ### Typing
 
-The language is **statically typed with type inference** — no explicit type annotations are written. Types are inferred from usage.
+The language is **statically typed with type inference** — no explicit type annotations are written anywhere. Types are inferred from usage and locked statically before execution.
 
 - A variable's type is determined at its **first assignment** and cannot change.
-- Arithmetic (`+` `-` `*` `/`) requires both operands to be the same type (`int` or `float`). No implicit coercion.
-- Division (`/`) always produces `float`, even when both operands are `int`. The return type is determined statically by the operator, not by the runtime value.
-- Comparisons (`==` `!=` `<` `<=` `>` `>=`) require both operands to be the same numeric type and always produce `bool`.
+- Arithmetic (`+` `-` `*` `/`) requires both operands to be the same type (`int` or `float`). No implicit coercion between types.
+- Division (`/`) always produces `float`, even when both operands are `int`. The return type is determined statically by the operator, not by the runtime value — `10 / 2` produces `5.0`, not `5`.
+- Comparisons (`==` `!=` `<` `<=` `>` `>=`) require both operands to be the same numeric type and always produce `bool`. Strings and booleans cannot be compared.
 - `if` and `while` conditions must be `bool`.
 - Function parameter types and return type are inferred at the **first call site** and locked for all subsequent calls.
 - Type checking runs as a **pre-execution pass** (`TypeChecker`). Type errors are reported before any side effects occur.
+
+This approach is **call-site inference**: types flow from literal values at the call site into the function body, rather than being declared at function boundaries. It is less structured than local type inference (which requires annotations at function boundaries) but requires no annotations at all.
 
 ### Scoping
 
@@ -409,14 +457,14 @@ func inner() {
 }
 
 func outer() {
-    x = 99;     # local to outer's frame
+    x = 99;     # local to outer's frame only
     inner();    # prints 1, not 99
 }
 
 outer();
 ```
 
-A dynamically scoped language would make `inner` inherit `outer`'s `x = 99` and print `99`.
+A dynamically scoped language would make `inner` inherit `outer`'s `x = 99` and print `99`. With lexical scoping, `inner` always sees the global `x = 1` regardless of where it is called from.
 
 Functions are defined at **global scope only**. Nested function definitions are not permitted.
 
@@ -436,17 +484,33 @@ print(double(x));   # 20
 print(x);           # 10 — unchanged
 ```
 
+Pass by reference would require storing a pointer back to the caller's frame slot instead of copying the value. In that model, `n = n * 2` inside the function would write back to `x` in the caller, making the final `print(x)` output `20`.
+
 ### Binding
 
-**Static variable binding** — a variable name is bound to exactly one type for its lifetime. The binding is established at first assignment and never changes.
+**Static variable binding** — a variable name is bound to exactly one type for its lifetime. The binding is established at first assignment and never changes. Attempting to reassign a variable with a different type raises `TypeError`.
 
-**Static type binding** — the type of an expression is determined at compile time from the types of its operands, not from runtime values. The clearest example is division: `int / int` always produces `float` by static rule, even when the result is a whole number (`10 / 2 = 5.0`, not `5`).
+**Static type binding** — the type of an expression is determined at compile time from the types of its operands, not from runtime values. The clearest example is division: `int / int` always produces `float` by static rule, even when the result is a whole number (`10 / 2 = 5.0`, not `5`). A dynamically typed language could inspect the runtime value and return `int` when the division is exact.
 
-**Static scope binding** — as described under [Scoping](#scoping), the scope chain is fixed at definition time.
+**Static scope binding** — as described under [Scoping](#scoping), the scope chain is fixed at definition time and never changes regardless of call site.
+
+### Recursion
+
+Recursive functions are fully supported. The runtime handles recursion through the call stack — each recursive call pushes a new frame, executes the body, and pops on return. There is no explicit recursion limit beyond Python's own stack depth.
+
+The type checker handles recursion via the `_in_progress` guard in `_infer_call`. When a recursive call is encountered mid-body-check, it returns `sig.return_type` (already seeded from the base case by `_collect_returns`) instead of re-entering the body, breaking the cycle.
+
+```
+func factorial(n) {
+    if (n < 2) { return 1; }
+    return n * factorial(n - 1);
+}
+print(factorial(5));   # 120
+```
 
 ### Known Limitations
 
-- **Uncalled functions are not type-checked.** Because parameter types are inferred from call sites, a function that is never called has no type information to check against. Type errors in its body will not be caught statically. This is an inherent consequence of the inference strategy and is left as future work.
+- **Uncalled functions are not type-checked.** Because parameter types are inferred from call sites, a function that is never called has no type information to check against. Type errors in its body will not be caught statically. This is an inherent consequence of the call-site inference strategy.
 - **Branch-conditional variables.** A variable assigned only inside an `if` branch is added to the type environment by the type checker regardless of which branch executes. If the branch is not taken at runtime, accessing the variable will raise a `NameError`. Fixing this requires flow-sensitive typing.
 
 ---
@@ -462,6 +526,6 @@ All examples are in the [`examples/`](examples/) directory and can be opened dir
 | `03_if_else.plc` | Conditional branching |
 | `04_while.plc` | While loops |
 | `05_functions.plc` | Function definition, recursion |
-| `06_static_type_binding.plc` | Static vs dynamic type binding — how division always returns `float` |
-| `07_static_scope_binding.plc` | Static vs dynamic scope — how callees resolve names from definition site |
+| `06_static_type_binding.plc` | Static vs dynamic type binding — how `int / int` always returns `float` |
+| `07_static_scope_binding.plc` | Static vs dynamic scope — how callees resolve names from their definition site |
 | `08_pass_by_value.plc` | Pass by value — mutating a parameter inside a function does not affect the caller |
