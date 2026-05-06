@@ -4,7 +4,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "example"))
 
-from components.ast.statement import DataType
+from components.ast.expression import DataType
 from components.lexica import MyLexer
 from components.memory import Memory
 from components.parsers import ASTParser

@@ -1,6 +1,6 @@
 from sly import Parser
 
-from components.ast.statement import (
+from components.ast.expression import (
     CompareOperations,
     Expression,
     Expression_boolean,
@@ -12,6 +12,8 @@ from components.ast.statement import (
     Expression_string,
     Expression_variable,
     Operations,
+)
+from components.ast.statement import (
     Statement_assignment,
     Statement_block,
     Statement_expression,
