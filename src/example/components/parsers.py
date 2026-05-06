@@ -220,6 +220,50 @@ if __name__ == "__main__":
     memory = Memory()
     parser = ASTParser()
     # text = "1 + 2 + 3"
+    def run_test(text, expected):
+        lexer = MyLexer()
+        parser = ASTParser()
+
+        result = parser.parse(lexer.tokenize(text))
+
+        assert result == expected, (
+            f"FAILED: {text}\n"
+            f"Expected: {expected}\n"
+            f"Got: {result}"
+        )
+
+        print(f"PASSED: {text} -> {result}")
+    # Arithmetic
+    run_test("5 + 3", 8)
+    run_test("10 - 2", 8)
+
+    # Precedence
+    run_test("5 + 3 * 2", 11)
+    run_test("(5 + 3) * 2", 16)
+
+    # Float
+    run_test("3.5 + 2.5", 6.0)
+
+    # Comparison
+    run_test("5 < 10", True)
+    run_test("5 == 5", True)
+
+    # Boolean
+    run_test("true", True)
+
+    # String
+    run_test('"hello"', "hello")
+
+    # Type error test
+    try:
+        run_test('5 + "hello"', None)
+        assert False, "Expected TypeError"
+
+    except TypeError:
+        print("PASSED: Type mismatch detected")
+
+    print("\nAll tests passed.")
+
     result = parser.parse(lexer.tokenize(text))
     print(result)
     # print(memory)

@@ -102,6 +102,72 @@ class MyLexer(Lexer):
 
 if __name__ == '__main__':
     # Write a simple test that only run when you execute this file
+    def run_lexer_test(text, expected_tokens):
+        lex = MyLexer()
+
+        tokens = [
+            token.type
+            for token in lex.tokenize(text)
+        ]
+
+        assert tokens == expected_tokens, (
+            f"FAILED: {text}\n"
+            f"Expected: {expected_tokens}\n"
+            f"Got: {tokens}"
+        )
+
+        print(f"PASSED: {text} -> {tokens}")
+
+    # Arithmetic
+    run_lexer_test(
+        "5 + 3",
+        ["NUMBER", "PLUS", "NUMBER"]
+    )
+
+    # Float
+    run_lexer_test(
+        "3.14 + 2",
+        ["FLOAT", "PLUS", "NUMBER"]
+    )
+
+    # Boolean
+    run_lexer_test(
+        "true false",
+        ["TRUE", "FALSE"]
+    )
+
+    # Variables
+    run_lexer_test(
+        "abc xyz",
+        ["NAME", "NAME"]
+    )
+
+    # String
+    run_lexer_test(
+        '"hello"',
+        ["STRING"]
+    )
+
+    # Comparison
+    run_lexer_test(
+        "x <= 10",
+        ["NAME", "LESS_EQUAL", "NUMBER"]
+    )
+
+    # Equality
+    run_lexer_test(
+        "x == y",
+        ["NAME", "EQUAL", "NAME"]
+    )
+
+    # Parentheses
+    run_lexer_test(
+        "(5 + 3)",
+        ["LPAREN", "NUMBER", "PLUS", "NUMBER", "RPAREN"]
+    )
+
+    print("\nAll lexer tests passed.")
+    
     string_input:str = "x1 + 1as! * ()"
     lex:Lexer = MyLexer()
     # assign type to `token`

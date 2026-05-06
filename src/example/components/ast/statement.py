@@ -9,7 +9,12 @@ class Statement:
     """
     def __init__(self) -> None:
         self.root_node = None
-        
+
+class DataType(Enum):
+    INT = "int"
+    FLOAT = "float"
+    BOOL = "bool"
+    STRING = "string"      
 
 class Operations(Enum):
     PLUS:int=0
@@ -56,7 +61,7 @@ class Expression_math(Expression):
                 f"and "
                 f"{self.parameter2.data_type}"
             )
-        allowed_types = ["int", "float"]
+        allowed_types = [DataType.INT, DataType.FLOAT]
 
         if self.parameter1.data_type not in allowed_types:
             raise TypeError(
@@ -84,7 +89,7 @@ class Expression_math(Expression):
 class Expression_number(Expression):
     def __init__(self, number:int) -> None:
         self.value = number
-        self.data_type = "int"
+        self.data_type = DataType.INT
         self.signature:str= str(number)
         
     def run(self) -> None:
@@ -96,7 +101,7 @@ class Expression_number(Expression):
 class Expression_float(Expression):
     def __init__(self, number: float):
         self.value = number
-        self.data_type = "float"
+        self.data_type = DataType.FLOAT
         self.signature = str(number)
 
     def run(self):
@@ -108,7 +113,7 @@ class Expression_float(Expression):
 class Expression_boolean(Expression):
     def __init__(self, value: bool):
         self.value = value
-        self.data_type = "bool"
+        self.data_type = DataType.BOOL
         self.signature = str(value)
 
     def run(self):
@@ -120,7 +125,7 @@ class Expression_boolean(Expression):
 class Expression_string(Expression):
     def __init__(self, text: str):
         self.value = text
-        self.data_type = "string"
+        self.data_type = DataType.STRING
         self.signature = text
 
     def run(self):
@@ -165,7 +170,7 @@ class Expression_compare(Expression):
         self.parameter2 = parameter2
 
         self.value = None
-        self.data_type = "bool"
+        self.data_type = DataType.BOOL
 
         self.children = [parameter1, parameter2]
 
