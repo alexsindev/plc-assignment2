@@ -171,22 +171,117 @@ A singleton (via `__new__`) that holds the entire runtime state. Call `memory.re
 
 ### `type_checker.py` — `TypeChecker`
 
-A pre-execution static analysis pass. Call `TypeChecker().check(program)` on the parsed AST before calling `tree.run(memory)`.
+A pre-execution static analysis pass. Call `TypeChecker().check(program)` on the parsed AST before calling `tree.run(memory)`. All type errors are raised before any side effects occur.
 
-**Two-pass algorithm:**
+**State:**
 
-1. **Pass 1** — scans the top-level block and registers all `Statement_function` nodes by name, enabling forward calls.
-2. **Pass 2** — walks every statement via `_check_stmt`, calling `_infer(expr)` to determine the `DataType` of each expression.
+| Field | Type | Purpose |
+|-------|------|---------|
+| `_vars` | `dict[str, DataType]` | Maps variable names to their locked type. Set on first assignment; used to enforce static type binding on every subsequent read or write. |
+| `_funcs` | `dict[str, _FuncSig]` | Maps function names to their signature record. Populated during the forward-reference pass so calls can appear before definitions. |
+| `_in_progress` | `set[str]` | Names of functions currently being body-checked. Guards against infinite recursion when a function calls itself. |
 
-**Type inference (`_infer`):**
+**`_FuncSig` (dataclass):** holds a reference to the `Statement_function` AST node alongside the inferred `param_types` and `return_type`. Both start as `None` and are filled in on the first call to the function.
 
-- Literals return their fixed type.
-- `Expression_variable` looks up `_vars[name]` — raises `NameError` if used before assignment.
-- `Expression_math` enforces same-type operands; returns `FLOAT` for division, else the operand type.
-- `Expression_compare` enforces numeric operands; always returns `BOOL`.
-- `Expression_call` infers argument types, locks them into the function signature on the first call, then checks the body (`_check_func_body`). Recursive calls are detected via `_in_progress` and return the partially-inferred return type.
+---
 
-**Variable locking:** on `Statement_assignment`, if `_vars` already contains a different type for the name, `TypeError` is raised.
+**`check(program)`** — public entry point. Runs two top-level passes over the program block:
+
+1. **Forward-reference pass** — registers every top-level `Statement_function` in `_funcs` before any statement is checked. This allows a function to be called before its definition appears in the source.
+2. **Check pass** — iterates every statement through `_check_stmt`.
+
+---
+
+**`_infer(expr) → DataType`** — central dispatch for expression type inference. Matches on the expression node type and returns its `DataType` without executing anything:
+
+- `Expression_number` → `INT`
+- `Expression_float` → `FLOAT`
+- `Expression_boolean` → `BOOL`
+- `Expression_string` → `STRING`
+- `Expression_variable` → looks up `_vars[name]`; raises `NameError` if the variable has not been assigned yet
+- `Expression_negate` → delegates to `_infer` on the operand; enforces numeric-only; returns the operand's type unchanged
+- `Expression_math` → delegates to `_infer_math`
+- `Expression_compare` → delegates to `_infer_compare`
+- `Expression_call` → delegates to `_infer_call`
+
+---
+
+**`_infer_math(expr) → DataType`** — type rule for binary arithmetic:
+
+1. Infers both operand types via `_infer`.
+2. Raises `TypeError` if the two types differ (no implicit coercion).
+3. Raises `TypeError` if the type is not `INT` or `FLOAT` (arithmetic is numeric-only).
+4. Returns `FLOAT` unconditionally when the operator is `/`, otherwise returns the operand type. This is the static rule that makes `int / int` always `float` regardless of runtime value.
+
+---
+
+**`_infer_compare(expr) → DataType`** — type rule for binary comparison:
+
+1. Infers both operand types via `_infer`.
+2. Raises `TypeError` if the types differ.
+3. Raises `TypeError` if the type is not `INT` or `FLOAT` (strings and booleans are not comparable).
+4. Always returns `BOOL`.
+
+---
+
+**`_infer_call(expr) → DataType`** — type rule for function calls. This is the most complex inference step:
+
+1. Raises `NameError` if the function name is not in `_funcs`.
+2. Infers the type of each argument via `_infer`.
+3. Raises `TypeError` on arity mismatch.
+4. **First call:** locks `sig.param_types` to the inferred argument types.
+5. **Subsequent calls:** raises `TypeError` if the argument types differ from the locked signature — function types are stable after first inference.
+6. **Recursive call guard:** if the function name is already in `_in_progress`, returns `sig.return_type` (already seeded from the base case) instead of re-entering the body. This breaks the infinite recursion cycle.
+7. **First call, non-recursive:** calls `_check_func_body` to check the body with the now-known parameter types, then returns the inferred return type.
+
+---
+
+**`_check_func_body(sig)`** — checks a function body in two passes, operating inside a temporary scope where parameters are pre-loaded into `_vars`:
+
+- **Pass 1 — `_collect_returns`:** traverses every `return` statement in the body (recursing into `if`/`while`/blocks), infers the type of each returned expression, and verifies all return paths agree. As each return type is found, it is immediately written to `sig.return_type` — this seeds the type early so that recursive calls encountered in the same pass can resolve to the correct type rather than `VOID`.
+- **Pass 2 — `_check_block`:** walks every statement in the body through `_check_stmt`, catching type errors in assignments, `print` calls, and bare expressions that `_collect_returns` skips.
+
+The variable scope is saved before the two passes and restored afterwards, so local variables and parameters do not pollute the outer environment.
+
+---
+
+**`_collect_returns(block, sig) → list[DataType]`** — recursively gathers the `DataType` of every `return` statement reachable from `block`. Delegates each statement to `_returns_in`. The `sig` parameter is threaded through so `_returns_in` can seed `sig.return_type` incrementally.
+
+---
+
+**`_returns_in(stmt, sig) → list[DataType]`** — extracts return types from a single statement:
+
+- `Statement_return` — infers the expression type; if `sig.return_type` is not yet set, sets it immediately (base-case seeding for recursive functions).
+- `Statement_if` — recurses into the then-block and, if present, the else-block.
+- `Statement_while` — recurses into the body.
+- `Statement_block` — recurses into the nested block.
+- All other statement types (assignments, `print`, etc.) — returns `[]`; these are handled separately by `_check_block` in Pass 2.
+
+---
+
+**`_check_stmt(stmt)`** — type-checks a single statement and updates `_vars` where applicable:
+
+- `Statement_assignment` — infers the RHS expression type; raises `TypeError` if the variable already exists in `_vars` with a different type; otherwise records the type in `_vars`.
+- `Statement_print` — infers the expression type (validates it is well-typed; the type itself is not restricted here).
+- `Statement_if` — infers the condition; raises `TypeError` if it is not `BOOL`; then calls `_check_block` on each branch.
+- `Statement_while` — infers the condition; raises `TypeError` if it is not `BOOL`; then calls `_check_block` on the body.
+- `Statement_return` — infers the expression type (validates it is well-typed).
+- `Statement_function` — registers the function in `_funcs` if not already present (handles functions defined inside blocks, though the runtime restricts these to global scope).
+- `Statement_expression` — infers the expression type to catch errors in bare calls.
+- `Statement_block` — delegates to `_check_block`.
+
+---
+
+**`_check_block(block)`** — iterates every statement in a `Statement_block` through `_check_stmt`. The shared entry point for checking any sequence of statements, used by `_check_func_body` (Pass 2), `_check_stmt` for `if`/`while` branches, and `check` itself.
+
+---
+
+**Known gaps (by design):**
+
+| Gap | Reason |
+|-----|--------|
+| Uncalled functions are not type-checked | Parameter types are inferred from the call site; with no call, there is nothing to infer from |
+| Variables assigned in only one branch of `if`/`while` may not exist at runtime | Fixing this requires flow-sensitive typing, which is out of scope |
 
 ### `highlighter.py` — `PLCSyntaxHighlighter`
 
