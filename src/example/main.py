@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QPlainTextEdit, QTextEdit, QSplitter, QFileDialog, QLabel,
 )
 from PySide6.QtCore import Qt
+from example.components.highlighter import PLCSyntaxHighlighter
 from example.components.lexica import MyLexer
 from example.components.parsers import ASTParser
 from example.components.memory import Memory
@@ -68,6 +69,8 @@ class CompilerIDE(QMainWindow):
             font-size: 14px;
             padding: 8px;
         """)
+
+        self._highlighter = PLCSyntaxHighlighter(self.code_editor.document())
 
         main_splitter.addWidget(self.code_editor)
 
