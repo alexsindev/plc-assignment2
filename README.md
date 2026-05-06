@@ -369,3 +369,4 @@ All examples are in the [`examples/`](examples/) directory and can be opened dir
 | `05_functions.plc` | Function definition, recursion |
 | `06_static_type_binding.plc` | Static vs dynamic type binding — how division always returns `float` |
 | `07_static_scope_binding.plc` | Static vs dynamic scope — how callees resolve names from definition site |
+| `08_pass_by_value.plc` | Pass by value — mutating a parameter inside a function does not affect the caller |

@@ -1,0 +1,47 @@
+print("=== Pass by Value ===");
+print("");
+print("Arguments are copied into the function's local frame.");
+print("Mutating the parameter inside the function does not affect the caller.");
+print("");
+
+func mutate(n) {
+    n = n + 100;
+    print("inside mutate, n =>");
+    print(n);
+    return n;
+}
+
+x = 5;
+print("before call, x =>");
+print(x);
+
+mutate(x);
+
+print("after call, x =>");
+print(x);
+
+print("x is unchanged — pass by reference would have made x = 105");
+print("");
+
+print("--- same holds for values passed through multiple calls ---");
+print("");
+
+func addOne(n) {
+    n = n + 1;
+    return n;
+}
+
+func addTwo(n) {
+    n = addOne(n);
+    n = addOne(n);
+    return n;
+}
+
+a = 10;
+b = addTwo(a);
+
+print("a =>");
+print(a);
+print("b =>");
+print(b);
+print("a is still 10, b received the new value");
