@@ -1,0 +1,45 @@
+print("=== Static (Lexical) Scope Binding ===");
+print("");
+print("Names resolve where the function is DEFINED, not where it is CALLED.");
+print("");
+
+print("--- Example 1: local variable in caller does not bleed into callee ---");
+print("");
+
+x = 1;
+
+func inner() {
+    print("inner sees x =>");
+    print(x);
+}
+
+func outer() {
+    x = 99;
+    print("outer local x =>");
+    print(x);
+    print("calling inner() from outer:");
+    inner();
+}
+
+outer();
+print("global x after outer() =>");
+print(x);
+print("static: inner printed 1  |  dynamic: would have printed 99");
+print("");
+
+print("--- Example 2: function parameter does not bleed into callees ---");
+print("");
+
+y = 100;
+
+func getY() {
+    print("getY sees y =>");
+    return y;
+}
+
+func demo(y) {
+    print(getY());
+}
+
+demo(999);
+print("static: getY printed 100  |  dynamic: would have printed 999");
