@@ -1,85 +1,460 @@
-from enum import Enum
-from abc import ABC, abstractmethod
+from __future__ import annotations
 
-class Statement:
-    """What is statement?
-    In this calculator project, a statement is each line of math expression.
-    In this case, it will consit of tree of math expression
-    """
-    def __init__(self) -> None:
-        root_node
-        
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+
+from ..memory import Memory
+
+
+class DataType(Enum):
+    INT = "int"
+    FLOAT = "float"
+    BOOL = "bool"
+    STRING = "string"
+    VOID = "void"
+
 
 class Operations(Enum):
-    PLUS:int=0
-    MINUS:int=1
-    TIMES:int=2
-    DIVIDE:int=3
+    PLUS = 0
+    MINUS = 1
+    TIMES = 2
+    DIVIDE = 3
 
-class Expression(ABC): 
+
+class CompareOperations(Enum):
+    LESS = 0
+    GREATER = 1
+    EQUAL = 2
+    NOT_EQUAL = 3
+    LESS_EQUAL = 4
+    GREATER_EQUAL = 5
+
+
+@dataclass
+class FunctionType:
+    parameter_types: list[DataType]
+    return_type: DataType | None = None
+
+
+class ReturnSignal(Exception):
+    def __init__(self, value: object, data_type: DataType):
+        self.value = value
+        self.data_type = data_type
+        super().__init__("return")
+
+
+class Statement(ABC):
     @abstractmethod
+    def run(self, memory: Memory | None = None) -> object: ...
+
+
+class Expression(ABC):
     def __init__(self) -> None:
-        self.signature:str = ""
-        self.value:int = None
-        pass
+        self.signature = ""
+        self.value = None
+        self.data_type: DataType | None = None
 
     @abstractmethod
-    def run(self) -> None:
-        pass
+    def run(self, memory: Memory | None = None) -> object: ...
+
 
 class Expression_math(Expression):
-    def __init__(self, operation:Operations, parameter1:Expression, parameter2:Expression):
-        # Init attribute
-        self.operation:Operations = operation
-        self.parameter1:Expression = parameter1
-        self.parameter2:Expression = parameter2
-        self.signature:str = ""
-        self.value:int = None
-        # Checking Logic
-        assert operation in Operations
-
-        # Create a children
+    def __init__(self, operation: Operations, parameter1: Expression, parameter2: Expression):
+        super().__init__()
+        if not isinstance(operation, Operations):
+            raise TypeError("Invalid arithmetic operation")
+        self.operation = operation
+        self.parameter1 = parameter1
+        self.parameter2 = parameter2
         self.children = [self.parameter1, self.parameter2]
-        
-    def run(self) -> None:
-        # evaluate child first
-        for child in self.children:
-            child.run()
-            # print(child)
 
-        # print(f"Calculating: {self.operation.name=} {self.parameter1=} {self.parameter2=}")
-        if(self.operation == Operations.PLUS):
-            self.value = self.parameter1.value + self.parameter2.value
-        elif(self.operation == Operations.MINUS):
-            self.value = self.parameter1.value - self.parameter2.value
-        elif(self.operation == Operations.TIMES):
-            self.value = self.parameter1.value * self.parameter2.value
-        elif(self.operation == Operations.DIVIDE):
-            self.value = self.parameter1.value / self.parameter2.value
+    def run(self, memory: Memory | None = None) -> object:
+        v1 = self.parameter1.run(memory)
+        t1 = self.parameter1.data_type
+        v2 = self.parameter2.run(memory)
+        t2 = self.parameter2.data_type
+
+        if t1 != t2:
+            raise TypeError(f"Type mismatch: {t1} and {t2}")
+        if t1 not in [DataType.INT, DataType.FLOAT]:
+            raise TypeError("Arithmetic operations only support int and float")
+
+        if self.operation == Operations.PLUS:
+            self.value = v1 + v2
+            self.data_type = t1
+        elif self.operation == Operations.MINUS:
+            self.value = v1 - v2
+            self.data_type = t1
+        elif self.operation == Operations.TIMES:
+            self.value = v1 * v2
+            self.data_type = t1
+        elif self.operation == Operations.DIVIDE:
+            self.value = v1 / v2
+            self.data_type = DataType.FLOAT
         else:
-            raise ValueError(f"{self.operation=} is not support. Please use class Statement.Operations. Actually, this should not happen.")
-        
-        self.signature = f"Expression: {self.operation.name} {self.parameter1.value} {self.parameter2.value}"
-        print(self)
+            raise ValueError(f"Unsupported arithmetic operation: {self.operation}")
+
+        self.signature = f"Expression_math({self.operation.name}, {v1}, {v2})"
+        return self.value
 
     def __repr__(self) -> str:
-        return self.signature
+        return self.signature or f"Expression_math:{self.operation.name}"
+
 
 class Expression_number(Expression):
-    def __init__(self, number:int) -> None:
-        self.value:int = number
-        self.signature:str= str(number)
-        
-    def run(self) -> None:
-        print(self)
+    def __init__(self, number: int) -> None:
+        super().__init__()
+        self.value = number
+        self.data_type = DataType.INT
+        self.signature = str(number)
+
+    def run(self, memory: Memory | None = None) -> object:
+        return self.value
 
     def __repr__(self) -> str:
         return f"Expression_number:{self.signature}"
 
-if __name__ == "__main__":
-    number1 = Expression_number(number=8)
-    number2 = Expression_number(number=9)
-    expr = Expression_math(Operations.MINUS, parameter1=number1, parameter2=number2)
-    expr.run()
-    # print(expr.hshow())
-    print(expr.value)
+
+class Expression_float(Expression):
+    def __init__(self, number: float) -> None:
+        super().__init__()
+        self.value = number
+        self.data_type = DataType.FLOAT
+        self.signature = str(number)
+
+    def run(self, memory: Memory | None = None) -> object:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_float:{self.signature}"
+
+
+class Expression_boolean(Expression):
+    def __init__(self, value: bool) -> None:
+        super().__init__()
+        self.value = value
+        self.data_type = DataType.BOOL
+        self.signature = str(value)
+
+    def run(self, memory: Memory | None = None) -> object:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_boolean:{self.signature}"
+
+
+class Expression_string(Expression):
+    def __init__(self, text: str) -> None:
+        super().__init__()
+        self.value = text
+        self.data_type = DataType.STRING
+        self.signature = text
+
+    def run(self, memory: Memory | None = None) -> object:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f'Expression_string:"{self.signature}"'
+
+
+class Expression_variable(Expression):
+    def __init__(self, variable_name: str) -> None:
+        super().__init__()
+        self.variable_name = variable_name
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        self.value = mem.get(self.variable_name)
+        self.data_type = mem.get_type(self.variable_name)
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_variable:{self.variable_name}"
+
+
+class Expression_call(Expression):
+    def __init__(self, function_name: str, arguments: list[Expression]) -> None:
+        super().__init__()
+        self.function_name = function_name
+        self.arguments = arguments
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        function_stmt = mem.get_function(self.function_name)
+
+        argument_values = []
+        argument_types = []
+        for argument in self.arguments:
+            argument.run(mem)
+            argument_values.append(argument.value)
+            argument_types.append(argument.data_type)
+
+        self.value, self.data_type = function_stmt.invoke(argument_values, argument_types, mem)
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_call:{self.function_name}"
+
+
+class Expression_negate(Expression):
+    def __init__(self, operand: Expression) -> None:
+        super().__init__()
+        self.operand = operand
+
+    def run(self, memory: Memory | None = None) -> object:
+        v = self.operand.run(memory)
+        self.data_type = self.operand.data_type
+        if self.data_type not in (DataType.INT, DataType.FLOAT):
+            raise TypeError(f"Unary minus does not support {self.data_type.value}")
+        self.value = -v
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_negate({self.operand!r})"
+
+
+class Expression_compare(Expression):
+    def __init__(
+        self,
+        operation: CompareOperations,
+        parameter1: Expression,
+        parameter2: Expression,
+    ) -> None:
+        super().__init__()
+        if not isinstance(operation, CompareOperations):
+            raise TypeError("Invalid comparison operation")
+        self.operation = operation
+        self.parameter1 = parameter1
+        self.parameter2 = parameter2
+        self.children = [self.parameter1, self.parameter2]
+        self.data_type = DataType.BOOL
+
+    def run(self, memory: Memory | None = None) -> object:
+        left = self.parameter1.run(memory)
+        t1 = self.parameter1.data_type
+        right = self.parameter2.run(memory)
+        t2 = self.parameter2.data_type
+
+        if t1 != t2:
+            raise TypeError("Comparison type mismatch")
+        if t1 not in [DataType.INT, DataType.FLOAT]:
+            raise TypeError("Comparisons only support int and float operands")
+
+        if self.operation == CompareOperations.LESS:
+            self.value = left < right
+        elif self.operation == CompareOperations.GREATER:
+            self.value = left > right
+        elif self.operation == CompareOperations.EQUAL:
+            self.value = left == right
+        elif self.operation == CompareOperations.NOT_EQUAL:
+            self.value = left != right
+        elif self.operation == CompareOperations.LESS_EQUAL:
+            self.value = left <= right
+        elif self.operation == CompareOperations.GREATER_EQUAL:
+            self.value = left >= right
+        else:
+            raise ValueError("Unsupported comparison operator")
+
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Expression_compare:{self.operation.name}"
+
+
+class Statement_expression(Statement):
+    def __init__(self, expression: Expression) -> None:
+        self.expression = expression
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        return self.expression.run(mem)
+
+    def __repr__(self) -> str:
+        return f"Statement_expression({self.expression!r})"
+
+
+class Statement_assignment(Statement):
+    def __init__(self, variable_name: str, expression: Expression) -> None:
+        self.variable_name = variable_name
+        self.expression = expression
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        value = self.expression.run(mem)
+        if self.expression.data_type is None:
+            raise TypeError("Assignment expression did not produce a type")
+        mem.set(self.variable_name, value, self.expression.data_type)
+        return value
+
+    def __repr__(self) -> str:
+        return f"Statement_assignment({self.variable_name})"
+
+
+class Statement_print(Statement):
+    def __init__(self, expression: Expression) -> None:
+        self.expression = expression
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        value = self.expression.run(mem)
+        if self.expression.data_type not in [
+            DataType.INT,
+            DataType.FLOAT,
+            DataType.BOOL,
+            DataType.STRING,
+        ]:
+            raise TypeError("print() only supports int, float, bool, and string values")
+        mem.write_output(value)
+        return value
+
+    def __repr__(self) -> str:
+        return f"Statement_print({self.expression!r})"
+
+
+class Statement_block(Statement):
+    def __init__(self, statements: list[Statement] | None = None) -> None:
+        self.statements = statements or []
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        last_result = None
+        for statement in self.statements:
+            last_result = statement.run(mem)
+        return last_result
+
+    def __repr__(self) -> str:
+        return f"Statement_block(size={len(self.statements)})"
+
+
+class Statement_if(Statement):
+    def __init__(
+        self,
+        condition: Expression,
+        then_block: Statement_block,
+        else_block: Statement_block | None = None,
+    ) -> None:
+        self.condition = condition
+        self.then_block = then_block
+        self.else_block = else_block
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        self.condition.run(mem)
+        if self.condition.data_type != DataType.BOOL:
+            raise TypeError("if condition must evaluate to bool")
+
+        if self.condition.value:
+            return self.then_block.run(mem)
+        if self.else_block is not None:
+            return self.else_block.run(mem)
+        return None
+
+    def __repr__(self) -> str:
+        return "Statement_if"
+
+
+class Statement_while(Statement):
+    def __init__(self, condition: Expression, body: Statement_block) -> None:
+        self.condition = condition
+        self.body = body
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        self.condition.run(mem)
+        if self.condition.data_type != DataType.BOOL:
+            raise TypeError("while condition must evaluate to bool")
+        last_result = None
+        while self.condition.value:
+            last_result = self.body.run(mem)
+            self.condition.run(mem)
+        return last_result
+
+    def __repr__(self) -> str:
+        return "Statement_while"
+
+
+class Statement_return(Statement):
+    def __init__(self, expression: Expression) -> None:
+        self.expression = expression
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        value = self.expression.run(mem)
+        if self.expression.data_type is None:
+            raise TypeError("return expression did not produce a type")
+        raise ReturnSignal(value, self.expression.data_type)
+
+    def __repr__(self) -> str:
+        return "Statement_return"
+
+
+class Statement_function(Statement):
+    def __init__(self, function_name: str, parameters: list[str], body: Statement_block) -> None:
+        self.function_name = function_name
+        self.parameters = parameters
+        self.body = body
+        self.function_type = FunctionType(parameter_types=[], return_type=None)
+
+    def run(self, memory: Memory | None = None) -> object:
+        mem = memory or Memory()
+        if not mem.is_global_scope():
+            raise SyntaxError("Functions can only be defined in the global scope")
+        mem.define_function(self.function_name, self)
+        return None
+
+    def invoke(
+        self,
+        argument_values: list[object],
+        argument_types: list[DataType],
+        memory: Memory | None = None,
+    ) -> tuple[object, DataType]:
+        mem = memory or Memory()
+        if len(argument_values) != len(self.parameters):
+            raise TypeError(
+                f"Function '{self.function_name}' expects {len(self.parameters)} arguments, "
+                f"got {len(argument_values)}"
+            )
+
+        if self.function_type.parameter_types:
+            if self.function_type.parameter_types != argument_types:
+                raise TypeError(
+                    f"Function '{self.function_name}' expects "
+                    f"{self.function_type.parameter_types}, got {argument_types}"
+                )
+        else:
+            self.function_type.parameter_types = list(argument_types)
+
+        mem.push_frame()
+        try:
+            for name, value, data_type in zip(self.parameters, argument_values, argument_types):
+                mem.set(name, value, data_type)
+
+            return_value = None
+            return_type = DataType.VOID
+            try:
+                self.body.run(mem)
+            except ReturnSignal as signal:
+                return_value = signal.value
+                return_type = signal.data_type
+        finally:
+            mem.pop_frame()
+
+        if self.function_type.return_type is None:
+            self.function_type.return_type = return_type
+        elif self.function_type.return_type != return_type:
+            raise TypeError(
+                f"Function '{self.function_name}' returned {return_type}, "
+                f"expected {self.function_type.return_type}"
+            )
+
+        return return_value, return_type
+
+    def __repr__(self) -> str:
+        signature = ", ".join(parameter.value for parameter in self.function_type.parameter_types)
+        return_type = (
+            self.function_type.return_type.value
+            if self.function_type.return_type is not None
+            else "unknown"
+        )
+        return f"Statement_function({self.function_name}({signature}) -> {return_type})"

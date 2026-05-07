@@ -1,67 +1,131 @@
 from sly import Lexer
-import sly
+
 
 class MyLexer(Lexer):
     """
-    MyLexer is a class that inherits from sly.Lexer
-    It is used to tokenize the input string.
-    ref: https://sly.readthedocs.io/en/latest/sly.html#sly-sly-lex-yacc
-    
-
-    Python regEX: https://www.w3schools.com/python/python_regex.asp
+    Lexer for the project language.
+    Supports literals, arithmetic/comparison operators, and statement keywords.
     """
 
-    ### `tokens` ###
-    # set `tokens` so it can be used in the parser.
-    # This must be here and all Capitalized. 
-    # Please, ignore IDE warning.
-    tokens = { ASSIGN, NAME, NUMBER, MINUS, DIVIDE, TIMES, LPAREN, RPAREN}
-    
-    # https://sly.readthedocs.io/en/latest/sly.html#literal-characters
-    literals = { '+' }
-    
-    ### matching rule ###
-    # The matching work from top to bottom
-    # At least, all toekns must be defined here
+    tokens = {
+        ASSIGN,
+        NAME,
+        NUMBER,
+        FLOAT,
+        STRING,
+        TRUE,
+        FALSE,
+        IF,
+        ELSE,
+        WHILE,
+        PRINT,
+        FUNC,
+        RETURN,
+        PLUS,
+        MINUS,
+        TIMES,
+        DIVIDE,
+        LESS,
+        LESS_EQUAL,
+        GREATER,
+        GREATER_EQUAL,
+        EQUAL,
+        NOT_EQUAL,
+        LPAREN,
+        RPAREN,
+        LBRACE,
+        RBRACE,
+        COMMA,
+        SEMI,
+    }
 
-    # Ignore spaces and tabs 
-    ignore = ' \t'
+    ignore = " \t"
 
-    ### EX1: simply define with regEX ###
-    NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
-    ### EX2: Define as a function ###
-    @_(r'\d+')
-    def NUMBER(self, token):
-        # Note that this function set parse token.value to integer
-        token.value = int(token.value)
-        # Extra print for debug
-        print(f"====This print from NUMBER function: {token.type=} {token.value=} {type(token.value)=}")
+    NAME = r"[a-zA-Z_][a-zA-Z0-9_]*"
+    NAME["true"] = TRUE
+    NAME["false"] = FALSE
+    NAME["if"] = IF
+    NAME["else"] = ELSE
+    NAME["while"] = WHILE
+    NAME["print"] = PRINT
+    NAME["func"] = FUNC
+    NAME["return"] = RETURN
+
+    LESS_EQUAL = r"<="
+    GREATER_EQUAL = r">="
+    EQUAL = r"=="
+    NOT_EQUAL = r"!="
+    ASSIGN = r"="
+    LESS = r"<"
+    GREATER = r">"
+    LPAREN = r"\("
+    RPAREN = r"\)"
+    LBRACE = r"\{"
+    RBRACE = r"\}"
+    COMMA = r","
+    SEMI = r";"
+    PLUS = r"\+"
+    MINUS = r"-"
+    TIMES = r"\*"
+    DIVIDE = r"/"
+
+    @_(r"\d+\.\d+")
+    def FLOAT(self, token):
+        token.value = float(token.value)
         return token
 
-    # Try uncomment this and run to see the differences between `token` and `literal`
-    ASSIGN  = r'\='
-    # PLUS    = r'\+'
-    MINUS   = r'-'
-    TIMES   = r'\*'
-    DIVIDE  = r'/'
-    LPAREN  = r'\('
-    RPAREN  = r'\)'
+    @_(r"\d+")
+    def NUMBER(self, token):
+        token.value = int(token.value)
+        return token
 
-    # Extra action for newlines
-    @_(r'\n+')
+    @_(r'"[^"\n]*"')
+    def STRING(self, token):
+        token.value = token.value[1:-1]
+        return token
+
+    @_(r"\n+")
     def ignore_newline(self, t):
-        # https://sly.readthedocs.io/en/latest/sly.html#line-numbers-and-position-tracking
-        self.lineno += t.value.count('\n')
+        self.lineno += t.value.count("\n")
 
     def error(self, t):
         self.index += 1
         print(f"ERROR: Illegal character '{t.value[0]}' at line {self.lineno}")
 
-if __name__ == '__main__':
-    # Write a simple test that only run when you execute this file
-    string_input:str = "x1 + 1as! * ()"
-    lex:Lexer = MyLexer()
-    # assign type to `token`
-    token: sly.lex.Token
-    for token in lex.tokenize(string_input):
-        print(token)
+
+if __name__ == "__main__":
+    def run_lexer_test(text, expected_tokens):
+        lex = MyLexer()
+        tokens = [token.type for token in lex.tokenize(text)]
+        assert tokens == expected_tokens, (
+            f"FAILED: {text}\nExpected: {expected_tokens}\nGot: {tokens}"
+        )
+        print(f"PASSED: {text} -> {tokens}")
+
+    run_lexer_test("5 + 3;", ["NUMBER", "PLUS", "NUMBER", "SEMI"])
+    run_lexer_test("3.14 + 2", ["FLOAT", "PLUS", "NUMBER"])
+    run_lexer_test("true false", ["TRUE", "FALSE"])
+    run_lexer_test("abc xyz", ["NAME", "NAME"])
+    run_lexer_test('"hello"', ["STRING"])
+    run_lexer_test("x <= 10", ["NAME", "LESS_EQUAL", "NUMBER"])
+    run_lexer_test("x == y", ["NAME", "EQUAL", "NAME"])
+    run_lexer_test(
+        "if (x < 2) { print(x); }",
+        [
+            "IF",
+            "LPAREN",
+            "NAME",
+            "LESS",
+            "NUMBER",
+            "RPAREN",
+            "LBRACE",
+            "PRINT",
+            "LPAREN",
+            "NAME",
+            "RPAREN",
+            "SEMI",
+            "RBRACE",
+        ],
+    )
+
+    print("\nAll lexer tests passed.")

@@ -1,0 +1,9 @@
+x = 42;
+pi = 3.14;
+flag = true;
+greeting = "hello";
+
+print(x);
+print(pi);
+print(flag);
+print(greeting);

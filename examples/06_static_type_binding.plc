@@ -1,0 +1,30 @@
+print("=== Static Type Binding ===");
+print("");
+print("INT / INT always yields FLOAT (type rule, not runtime value).");
+print("A dynamic language would return INT when division is exact.");
+print("");
+
+a = 10;
+b = 2;
+exact = a / b;
+
+print("10 / 2 (static)  =>");
+print(exact);
+print("dynamic would yield: 5 (int)");
+print("");
+
+a2 = 10;
+b2 = 3;
+inexact = a2 / b2;
+
+print("10 / 3 (static)  =>");
+print(inexact);
+print("dynamic would yield: 3.333... (float) -- both agree here");
+print("");
+
+print("Variable type is locked after first assignment.");
+x = 100;
+x = 200;
+print(x);
+print("Assigning a float to x would raise TypeError.");
+print("A dynamic language would silently change x to float.");
