@@ -24,8 +24,8 @@
 
 \hypersetup{
     colorlinks=true,
-    linkcolor=blue!60!black,
-    urlcolor=blue!60!black,
+    linkcolor=darkblue,
+    urlcolor=darkblue,
     pdftitle={PLC Assignment 2 Report},
     pdfauthor={Kyal Sin Lin Lett, Wai Yan Aung, Aakriti Poudel}
 }
@@ -61,38 +61,67 @@
 
 \begin{titlepage}
     \centering
-    \vspace*{1.2cm}
+    \vspace*{1.0cm}
 
-    {\Huge\bfseries PLC Assignment 2\par}
-    \vspace{0.7cm}
-    {\Large Programming Language and Compiler Group Project Report\par}
+    {\Huge\bfseries\color{darkblue}
+    Programming Language Project\par}
 
-    \vspace{2.3cm}
-    {\Large\itshape by\par}
+    \vspace{0.5cm}
+
+    {\Large\itshape\color{softgray}
+    Design and Implementation of a Programming Language\par}
+
+    \vspace{1.3cm}
+
+    \vspace{0.3cm}
+
+    {\large\color{softgray}
+    Group:  Backus--Naur Form (BNF)\par}
+
+    \vspace{2.0cm}
+
+    {\Large\itshape\color{darkblue} Prepared by\par}
+
     \vspace{0.8cm}
 
-    {\Large
-    Kyal Sin Lin Lett\par
-    Wai Yan Aung\par
+    {\Large\color{darkblue}
+    Kyal Sin Lin Lett \quad | \quad
+    Wai Yan Aung \quad | \quad
     Aakriti Poudel\par}
 
-    \vspace{1.9cm}
-    {\Large\bfseries Course: Programming Language and Compiler\par}
-
     \vspace{1.8cm}
-    {\Large\bfseries Submitted to\par}
+
+    {\Large\bfseries\color{darkblue}
+    Course: Programming Language and Compiler\par}
+
+    \vspace{1.6cm}
+
+    {\Large\bfseries\color{darkblue}
+    Submitted to\par}
+
     \vspace{0.3cm}
-    {\Large Prof. Phan Min Dung\par}
-    {\Large Mr. Akraradet Sinsamersuk\par}
+
+    {\Large\color{darkblue}
+    Prof. Phan Min Dung\par}
+
+    {\Large\color{darkblue}
+    Mr. Akraradet Sinsamersuk\par}
 
     \vfill
 
-    {\Large\bfseries Asian Institute of Technology\par}
+    {\Large\bfseries\color{darkblue}
+    Asian Institute of Technology\par}
+
     \vspace{0.2cm}
-    {\Large FAST\par}
+
+    {\Large\color{darkblue}
+    FAST\par}
 
     \vspace{0.8cm}
-    {\Large May 2026\par}
+
+    {\Large\color{softgray}
+    May 2026\par}
+
 \end{titlepage}
 
 \tableofcontents
@@ -108,7 +137,7 @@ In addition to the language core, the project includes a desktop integrated deve
 \section{Introduction}
 Programming language implementation is one of the clearest ways to combine theory with practice in compiler construction. A language project forces the developer to think carefully about syntax, semantics, runtime behavior, type systems, and error handling. Rather than only reading formal definitions of grammars, scope, or type checking, one must encode these ideas into real data structures and algorithms.
 
-The goal of this project was to build a compact yet meaningful language that demonstrates core compiler concepts while still remaining understandable and testable within one course assignment. The project requirements asked for support for four basic types, static typing, arithmetic precedence, boolean expressions, assignment statements, \texttt{if-then-else}, \texttt{while}, function abstraction with value parameter passing, and a \texttt{print()} function. Our implementation satisfies these requirements and further packages them into a small IDE-style graphical application.
+The goal of this project was to build a compact yet meaningful language that demonstrates core compiler concepts while still remaining understandable and testable within one course assignment. The project requirements asked for support for four basic types, static typing, arithmetic precedence, boolean expressions, assignment statements,if-then-else, while, function abstraction with value parameter passing, and a print function. Our implementation satisfies these requirements and further packages them into a small IDE-style graphical application.
 
 Although the implementation ultimately executes programs through an interpreter rather than generating assembly or bytecode, it still follows the classic compiler structure. The system lexes raw source text, parses it into structured syntax, transforms it into an AST, performs a semantic/type checking pass, and only then executes the validated program. This separation is important because it mirrors how production language systems are structured and gives us a clean place to reason about typing, binding, and function behavior.
 
